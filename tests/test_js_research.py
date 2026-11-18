@@ -28,6 +28,10 @@ class JavaScriptResearchTests(unittest.TestCase):
             ["https://example.test/assets/app.js"],
         )
 
+    def test_ignores_malformed_script_url(self):
+        response = Response('<script src="https://example.test:invalid/bad.js"></script>')
+        self.assertEqual(extract_same_origin_script_urls(response), [])
+
     def test_finds_source_and_sink_candidate(self):
         findings = inspect_javascript_source(
             "https://example.test/app.js",
