@@ -42,7 +42,10 @@ def extract_same_origin_script_urls(response, limit: int = 12) -> list[str]:
     for source in parser.sources:
         candidate = urljoin(response.url, source)
         parts = urlsplit(candidate)
-        candidate_origin = (parts.scheme.lower(), (parts.hostname or "").lower(), parts.port or (443 if parts.scheme == "https" else 80))
+        try:
+            candidate_origin = (parts.scheme.lower(), (parts.hostname or "").lower(), parts.port or (443 if parts.scheme == "https" else 80))
+        except ValueError:
+            continue
         if candidate_origin != origin or parts.username or parts.password:
             continue
         if parts.scheme.lower() not in {"http", "https"} or candidate in seen:
