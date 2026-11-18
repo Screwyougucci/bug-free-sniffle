@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+scope.json
+darth-report.json
+darth-fuzz-report.json
+.pytest_cache/
+.coverage
