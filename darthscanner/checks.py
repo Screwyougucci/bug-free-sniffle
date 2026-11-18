@@ -263,9 +263,10 @@ def inspect_html(response: HttpResponse) -> list[Finding]:
         is_external = absolute.scheme in {"http", "https"} and absolute.netloc and absolute.netloc.lower() != page.netloc.lower()
         if tag == "script" and value and is_external and not attrs.get("integrity"):
             findings.append(_finding(
-                "html", "Cross-origin script has no Subresource Integrity attribute", "low", "medium",
+                "html", "Cross-origin script has no Subresource Integrity attribute", "info", "medium",
                 response, f"External script source: {absolute.netloc}{absolute.path[:100]}.",
                 "Use Subresource Integrity where the external asset is version-pinned and supports it.",
+                kind="observation",
             ))
 
     for attrs in audit.blank_links:
