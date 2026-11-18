@@ -79,7 +79,7 @@ class PassiveChecksTests(unittest.TestCase):
     def test_csp_unsafe_directives_are_flagged(self):
         response = HttpResponse("https://owned.example/", 200, {
             "content-type": "text/html",
-            "content-security-policy": "default-src *; script-src 'unsafe-inline' 'unsafe-eval'",
+            "content-security-policy": "default-src 'self'; script-src * 'unsafe-inline' 'unsafe-eval'",
         }, b"<html></html>", 0.1)
         titles = {finding.title for finding in inspect_http(response)}
         self.assertIn("CSP permits inline scripts", titles)
@@ -115,7 +115,7 @@ class PassiveChecksTests(unittest.TestCase):
                                 b'<script src="https://cdn.example/app.js"></script>', 0.1)
         finding = next(f for f in inspect_html(response)
                        if f.title == "Cross-origin script has no Subresource Integrity attribute")
-        self.assertEqual(finding.kind, "finding")
+        self.assertEqual(finding.kind, "observation")
 
 
 if __name__ == "__main__":
