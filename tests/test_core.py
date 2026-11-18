@@ -67,10 +67,15 @@ class PassiveChecksTests(unittest.TestCase):
         self.assertIn("Content Security Policy is missing", titles)
         self.assertIn("HSTS header is missing", titles)
 
-    def test_non_html_does_not_trigger_html_header_findings(self):
+    def test_non_html_does_not_trigger_html_only_header_findings(self):
         response = HttpResponse("https://owned.example/api", 200,
                                 {"content-type": "application/json"}, b"{}", 0.1)
-        self.assertFalse(any(f.category == "http-headers" for f in inspect_http(response)))
+        titles = {finding.title for finding in inspect_http(response)}
+        self.assertNotIn("Content Security Policy is missing", titles)
+        self.assertNotIn("Referrer-Policy is missing", titles)
+        self.assertNotIn("Permissions-Policy is missing", titles)
+        # HSTS is a site-wide HTTPS policy and also applies to non-HTML responses.
+        self.assertIn("HSTS header is missing", titles)
 
 
 if __name__ == "__main__":
