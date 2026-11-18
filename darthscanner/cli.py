@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from . import __version__
 from .checks import inspect_html, inspect_http
 from .browser_audit import inspect_browser_code
+from .js_research import extract_same_origin_script_urls, inspect_javascript_source
 from .crawler import crawl
 from .cve import load_inventory, load_nvd_feed, match_cves
 from .exposure import probe_sensitive_paths
@@ -135,12 +136,36 @@ def main(argv: list[str] | None = None) -> int:
             responses = crawl(args.target, scope, client)
             findings = []
             components_by_cpe = {}
+            script_urls = []
             for response in responses:
                 findings.extend(inspect_http(response))
                 findings.extend(inspect_html(response))
                 findings.extend(inspect_browser_code(response))
+                script_urls.extend(extract_same_origin_script_urls(response))
                 for component in fingerprint_response(response):
                     components_by_cpe[component.cpe] = component
+
+            # Review a bounded number of same-origin JavaScript files. Keep at least
+            # 20 requests available for the existing exposure/method checks.
+            script_budget = max(0, min(12, client.max_requests - client.requests_made - 20))
+            script_responses = []
+            seen_scripts = set()
+            for script_url in script_urls:
+                if len(script_responses) >= script_budget or script_url in seen_scripts:
+                    break
+                seen_scripts.add(script_url)
+                try:
+                    scope.validate_url(script_url)
+                except ValueError:
+                    continue
+                script_response = client.get(script_url)
+                if script_response.status is None or script_response.status >= 400:
+                    continue
+                content_type = script_response.headers.get("content-type", "").lower()
+                if "javascript" not in content_type and not urlsplit(script_url).path.lower().endswith((".js", ".mjs")):
+                    continue
+                script_responses.append(script_response)
+                findings.extend(inspect_javascript_source(script_url, script_response.text))
 
             tls_probes = 0
             if urlsplit(args.target).scheme.lower() == "https":
@@ -165,16 +190,23 @@ def main(argv: list[str] | None = None) -> int:
 
             pages = [
                 {"url": r.url, "status": r.status, "response_bytes": len(r.body),
-                 "elapsed_seconds": round(r.elapsed_seconds, 3), "error": r.error}
+                 "elapsed_seconds": round(r.elapsed_seconds, 3), "error": r.error,
+                 "resource_type": "html"}
                 for r in responses
             ]
+            pages.extend(
+                {"url": r.url, "status": r.status, "response_bytes": len(r.body),
+                 "elapsed_seconds": round(r.elapsed_seconds, 3), "error": r.error,
+                 "resource_type": "javascript"}
+                for r in script_responses
+            )
             software = [component.to_dict() for component in components]
             _write_bundle(
                 args, target=args.target, requests_made=client.requests_made,
                 pages=pages, findings=findings, software=software,
                 exposure_paths_checked=exposure_paths_checked, tls_probes=tls_probes,
             )
-            print(f"Scanned {len(responses)} page(s); {client.requests_made} HTTP request(s).")
+            print(f"Scanned {len(responses)} HTML page(s) and statically reviewed {len(script_responses)} same-origin JavaScript file(s); {client.requests_made} HTTP request(s).")
             print(f"Exposure paths checked: {exposure_paths_checked}; TLS probes attempted: {tls_probes}.")
             print(f"Software fingerprints: {len(components)}")
             _print_finding_summary(findings)
