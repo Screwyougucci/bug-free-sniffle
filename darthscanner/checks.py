@@ -28,10 +28,18 @@ class Finding:
     references: list[str] = field(default_factory=list)
     affected_component: str | None = None
     remediation_steps: list[str] = field(default_factory=list)
+    confidence_score: int | None = None
+
+    def __post_init__(self):
+        if self.confidence_score is None:
+            self.confidence_score = {"high": 90, "medium": 65, "low": 35}.get(self.confidence.lower(), 20)
+        self.confidence_score = max(0, min(100, int(self.confidence_score)))
 
     @property
     def finding_id(self) -> str:
-        material = "|".join((self.category, self.title, self.url, self.affected_component or ""))
+        parts = urlsplit(self.url)
+        normalized_url = f"{parts.scheme.lower()}://{parts.netloc.lower()}{parts.path or '/'}"
+        material = "|".join((self.category, self.title, normalized_url, self.affected_component or ""))
         return sha256(material.encode("utf-8")).hexdigest()[:16].upper()
 
     def to_dict(self) -> dict:
