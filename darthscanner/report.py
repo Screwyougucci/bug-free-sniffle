@@ -87,7 +87,9 @@ def write_report(path: str, *, target: str, requests_made: int,
                  fuzz_observations: list[dict] | None = None,
                  software_components: list[dict] | None = None,
                  exposure_paths_checked: int = 0,
-                 tls_probes: int = 0) -> dict:
+                 tls_probes: int = 0,
+                 source_files_reviewed: int = 0,
+                 source_files_skipped: int = 0) -> dict:
     payload = build_report(
         target=target,
         requests_made=requests_made,
@@ -97,6 +99,8 @@ def write_report(path: str, *, target: str, requests_made: int,
         software_components=software_components,
         exposure_paths_checked=exposure_paths_checked,
         tls_probes=tls_probes,
+        source_files_reviewed=source_files_reviewed,
+        source_files_skipped=source_files_skipped,
     )
     Path(path).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return payload
