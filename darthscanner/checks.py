@@ -78,6 +78,8 @@ def _finding(category: str, title: str, severity: str, confidence: str,
         cwe_ids = ["CWE-1022"]
     elif "Clickjacking protection" in title:
         cwe_ids = ["CWE-1021"]
+    elif "Content Security Policy" in title:
+        cwe_ids = ["CWE-693"]
     elif category == "csp":
         cwe_ids = ["CWE-693"]
     elif category == "cookies":
