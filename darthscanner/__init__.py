@@ -1,3 +1,3 @@
-"""Darth Scanner: scoped, non-destructive web security assessment."""
+"Darth Scanner: scoped, non-destructive web and server security assessment; no AI components."
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
