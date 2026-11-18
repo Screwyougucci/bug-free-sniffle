@@ -1,18 +1,21 @@
-"""Command-line interface."""
+"""Command-line interface for the deterministic scanner."""
 from __future__ import annotations
 
 import argparse
 from collections import Counter
 import sys
+from urllib.parse import urlsplit
 
 from . import __version__
 from .checks import inspect_html, inspect_http
 from .crawler import crawl
 from .cve import load_inventory, load_nvd_feed, match_cves
+from .exposure import probe_sensitive_paths
 from .fingerprint import fingerprint_response
 from .fuzzer import observations_to_dict, run_fuzz
 from .http_client import SafeHttpClient
-from .report import write_report
+from .method_checks import inspect_http_methods
+from .report import write_report_bundle
 from .scope import ScopeError, load_scope, require_authorization
 from .tls_checks import inspect_tls
 
@@ -20,18 +23,20 @@ from .tls_checks import inspect_tls
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="darth-scanner",
-        description="A conventional, scope-controlled web and server security scanner. No AI components.",
+        description="A deterministic, scope-controlled web and server security scanner. No AI components.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
 
-    scan = commands.add_parser("scan", help="crawl same-origin pages and run passive checks")
+    scan = commands.add_parser("scan", help="crawl a site, check server/TLS settings, and inspect exposure paths")
     scan.add_argument("--target", required=True, help="starting http(s) URL")
     scan.add_argument("--scope", default="scope.json", help="authorization scope JSON")
     scan.add_argument("--acknowledge-authorization", action="store_true")
     scan.add_argument("--nvd-json", help="optional local NVD 2.0 JSON feed for CVE matching")
     scan.add_argument("--inventory", help="optional CPE inventory JSON to add to discovered software")
-    scan.add_argument("--output", default="darth-report.json")
+    scan.add_argument("--output", default="darth-report.json", help="JSON report output")
+    scan.add_argument("--html-output", default="darth-report.html", help="interactive HTML dashboard output")
+    scan.add_argument("--csv-output", default="darth-findings.csv", help="CSV findings output")
 
     fuzz = commands.add_parser("fuzz", help="run bounded, benign GET query-parameter fuzzing")
     fuzz.add_argument("--url", required=True, help="specific GET URL containing the parameter")
@@ -40,11 +45,15 @@ def _parser() -> argparse.ArgumentParser:
     fuzz.add_argument("--acknowledge-authorization", action="store_true")
     fuzz.add_argument("--max-cases", type=int, default=9, help="1-20 benign mutations")
     fuzz.add_argument("--output", default="darth-fuzz-report.json")
+    fuzz.add_argument("--html-output", default="darth-fuzz-report.html")
+    fuzz.add_argument("--csv-output", default="darth-fuzz-findings.csv")
 
     cve = commands.add_parser("cve", help="match a software inventory against a local NVD 2.0 JSON feed")
     cve.add_argument("--inventory", required=True, help="JSON inventory containing CPE 2.3 component identifiers")
     cve.add_argument("--nvd-json", required=True, help="local NVD 2.0 JSON feed")
     cve.add_argument("--output", default="darth-cve-report.json")
+    cve.add_argument("--html-output", default="darth-cve-report.html")
+    cve.add_argument("--csv-output", default="darth-cve-findings.csv")
     return parser
 
 
@@ -59,6 +68,23 @@ def _print_finding_summary(findings) -> None:
             print(f"  [{item.severity.upper()}] {item.title} — {rating}")
 
 
+def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
+                  findings: list, software: list[dict] | None = None,
+                  fuzz_observations: list[dict] | None = None,
+                  exposure_paths_checked: int = 0, tls_probes: int = 0) -> dict:
+    return write_report_bundle(
+        args.output, args.html_output, args.csv_output,
+        target=target,
+        requests_made=requests_made,
+        pages=pages,
+        findings=findings,
+        fuzz_observations=fuzz_observations,
+        software_components=software,
+        exposure_paths_checked=exposure_paths_checked,
+        tls_probes=tls_probes,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
@@ -67,11 +93,11 @@ def main(argv: list[str] | None = None) -> int:
             feed = load_nvd_feed(args.nvd_json)
             findings = match_cves(components, feed)
             software = [component.to_dict() for component in components]
-            write_report(args.output, target=args.inventory, requests_made=0,
-                         pages=[], findings=findings, software_components=software)
+            _write_bundle(args, target=args.inventory, requests_made=0,
+                          pages=[], findings=findings, software=software)
             print(f"Loaded {len(components)} software component(s) and {len(feed)} CVE record(s).")
             _print_finding_summary(findings)
-            print(f"Detailed report: {args.output}")
+            print(f"JSON: {args.output}\nHTML: {args.html_output}\nCSV: {args.csv_output}")
             return 0
 
         scope = load_scope(args.scope)
@@ -88,7 +114,17 @@ def main(argv: list[str] | None = None) -> int:
                 findings.extend(inspect_html(response))
                 for component in fingerprint_response(response):
                     components_by_cpe[component.cpe] = component
-            findings.extend(inspect_tls(args.target, scope))
+
+            tls_probes = 0
+            if urlsplit(args.target).scheme.lower() == "https":
+                findings.extend(inspect_tls(args.target, scope))
+                tls_probes = 6
+
+            before_exposure = client.requests_made
+            findings.extend(probe_sensitive_paths(args.target, scope, client, max_paths=18))
+            exposure_paths_checked = client.requests_made - before_exposure
+
+            findings.extend(inspect_http_methods(args.target, scope, client))
 
             if args.inventory:
                 for component in load_inventory(args.inventory):
@@ -97,8 +133,7 @@ def main(argv: list[str] | None = None) -> int:
 
             if args.nvd_json:
                 feed = load_nvd_feed(args.nvd_json)
-                cve_findings = match_cves(components, feed)
-                findings.extend(cve_findings)
+                findings.extend(match_cves(components, feed))
                 print(f"CVE matching: {len(components)} component(s) against {len(feed)} NVD record(s).")
 
             pages = [
@@ -107,12 +142,16 @@ def main(argv: list[str] | None = None) -> int:
                 for r in responses
             ]
             software = [component.to_dict() for component in components]
-            write_report(args.output, target=args.target, requests_made=client.requests_made,
-                         pages=pages, findings=findings, software_components=software)
-            print(f"Scanned {len(responses)} page(s); {client.requests_made} request(s).")
+            _write_bundle(
+                args, target=args.target, requests_made=client.requests_made,
+                pages=pages, findings=findings, software=software,
+                exposure_paths_checked=exposure_paths_checked, tls_probes=tls_probes,
+            )
+            print(f"Scanned {len(responses)} page(s); {client.requests_made} HTTP request(s).")
+            print(f"Exposure paths checked: {exposure_paths_checked}; TLS probes attempted: {tls_probes}.")
             print(f"Software fingerprints: {len(components)}")
             _print_finding_summary(findings)
-            print(f"Detailed report: {args.output}")
+            print(f"JSON: {args.output}\nHTML: {args.html_output}\nCSV: {args.csv_output}")
             return 0
 
         if args.max_cases < 1 or args.max_cases > 20:
@@ -120,13 +159,15 @@ def main(argv: list[str] | None = None) -> int:
         scope.validate_url(args.url)
         client = SafeHttpClient(scope, max_requests=min(scope.max_requests, args.max_cases + 1))
         observations = run_fuzz(args.url, args.param, scope, client, args.max_cases)
-        write_report(args.output, target=args.url, requests_made=client.requests_made,
-                     pages=[], findings=[], fuzz_observations=observations_to_dict(observations))
+        _write_bundle(
+            args, target=args.url, requests_made=client.requests_made, pages=[],
+            findings=[], fuzz_observations=observations_to_dict(observations),
+        )
         anomalies = sum("no notable" not in item.note for item in observations)
         print(f"Fuzzed {args.param!r} with {len(observations)} benign mutation(s).")
         print(f"Observations requiring review: {anomalies}")
         print("These are robustness signals, not confirmed vulnerabilities.")
-        print(f"Report: {args.output}")
+        print(f"JSON: {args.output}\nHTML: {args.html_output}\nCSV: {args.csv_output}")
         return 0
     except (ScopeError, ValueError, RuntimeError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
