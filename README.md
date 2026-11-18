@@ -4,7 +4,7 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.6.0 capabilities
+## Version 0.7.0 capabilities
 
 ### 1. Website security checks
 
@@ -67,11 +67,14 @@ CVSS v2 has no Critical tier; scores 7.0–10.0 are High.
 
 **CVE matches are candidates, not proof of exposure.** A product banner may be spoofed, NVD configuration expressions can require additional platform conditions, and vendors sometimes backport fixes without changing the upstream version string. Verify the exact vendor build, platform conditions, and advisory before treating a match as exploitable.
 
-### 6. Fuzzing
+### 6. Adaptive differential fuzzing
 
-- A conservative GET query-parameter fuzzer with 32 bounded, benign mutation values and anomaly evidence.
-- One request at a time, fixed minimum delay, bounded request count, and no redirects, form submissions, credential guessing, uploads, or exploit payload execution.
-- Status changes, 5xx responses, diagnostic signatures, content-type changes, response hashes, input reflection, large response-size changes, and slow responses are recorded as triage signals, not confirmed vulnerabilities.
+- Fuzz one exact query parameter or use `--param "*"` to cover up to 8 existing parameters in the supplied URL.
+- Uses up to 32 total bounded, benign values across parameters, including type, encoding, Unicode, and length-boundary cases.
+- Captures a per-parameter baseline and compares status, response-body hash, content type, redirect Location, response size, latency, diagnostic signatures, and input reflection.
+- Every observation includes the baseline hash and structured anomaly flags in JSON.
+- One request at a time with the scope's minimum delay and shared request budget. No forms, uploads, credentials, redirect following, exploit payloads, or state-changing methods.
+- A changed response is only a lead: dynamic pages, personalization, and cache behavior can cause harmless differences. Reproduce and inspect manually.
 
 ### 7. Zero-day research mode (local source audit)
 
@@ -161,7 +164,7 @@ darth-scanner cve --inventory .\asset-inventory.json --nvd-json .\nvdcve-2.0-rec
 Use a specific GET URL containing the parameter to be mutated. Prefer a staging application or local test service:
 
 ```powershell
-darth-scanner fuzz --url "https://example.test/search?q=baseline" --param q --scope scope.json --acknowledge-authorization --max-cases 32
+darth-scanner fuzz --url "https://example.test/search?q=baseline&page=1" --param "*" --scope scope.json --acknowledge-authorization --max-cases 32
 ```
 
 The fuzzer sends one baseline request plus up to 32 bounded benign mutations. It records response hashes, response metadata, error signatures, and whether the input appears verbatim in the response. It does not execute SQL injection or XSS payloads. All observations require manual review.
@@ -201,7 +204,7 @@ Treat results as code-review leads. Confirm reachability, input control, authent
 - **Candidate exposure:** a HEAD response indicates a sensitive-looking path may be reachable; confirm internally without exposing the contents.
 - **Fuzz anomaly:** a response difference that needs manual reproduction.
 
-The scanner does not automatically exploit findings. It is designed to identify candidates and produce evidence for authorized security review. Version 0.5.0 adds passive browser-side XSS indicators but does not claim to prove or exploit zero-days.
+The scanner does not automatically exploit findings. It is designed to identify candidates and produce evidence for authorized security review. Version 0.7.0 adds adaptive multi-parameter differential fuzzing and deeper passive browser-side JavaScript review but does not claim to prove or exploit zero-days.
 
 ## Tests
 
