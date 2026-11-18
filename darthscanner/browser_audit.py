@@ -128,8 +128,8 @@ def inspect_browser_code(response) -> list[Finding]:
                 confidence_score=30,
             ))
 
-    combined_script = "\\n".join(parser.inline_scripts)
-    if re.search(r"\\.postMessage\\s*\\([\\s\\S]{0,300}?,\\s*['\\\"]\\*['\\\"]\\s*\\)", combined_script):
+    combined_script = "\n".join(parser.inline_scripts)
+    if re.search(r"\.postMessage\s*\([\s\S]{0,300}?,\s*['\"]\*['\"]\s*\)", combined_script):
         findings.append(Finding(
             category="browser-messaging",
             title="postMessage appears to use a wildcard target origin",
@@ -146,7 +146,7 @@ def inspect_browser_code(response) -> list[Finding]:
             confidence_score=55,
         ))
 
-    if re.search(r"\\b(?:localStorage|sessionStorage)\\.setItem\\s*\\(\\s*['\\\"][^'\\\"]*(?:token|auth|session|jwt|secret)[^'\\\"]*['\\\"]", combined_script, re.I):
+    if re.search(r"\b(?:localStorage|sessionStorage)\.setItem\s*\(\s*['\"][^'\"]*(?:token|auth|session|jwt|secret)[^'\"]*['\"]", combined_script, re.I):
         findings.append(Finding(
             category="browser-storage",
             title="Authentication-like value may be stored in web storage",
@@ -164,7 +164,7 @@ def inspect_browser_code(response) -> list[Finding]:
         ))
 
     for block in parser.inline_scripts:
-        for match in re.findall(r"sourceMappingURL\\s*=\\s*([^\\s*]+)", block):
+        for match in re.findall(r"sourceMappingURL\s*=\s*([^\s*]+)", block):
             if match.startswith(("http://", "https://", "/", "./")):
                 resolved = urlsplit(urljoin(response.url, match))
                 if resolved.netloc.lower() == urlsplit(response.url).netloc.lower():
