@@ -17,6 +17,7 @@ from .http_client import SafeHttpClient
 from .method_checks import inspect_http_methods
 from .report import write_report_bundle
 from .scope import ScopeError, load_scope, require_authorization
+from .source_audit import audit_python_source
 from .tls_checks import inspect_tls
 
 
@@ -54,6 +55,16 @@ def _parser() -> argparse.ArgumentParser:
     cve.add_argument("--output", default="darth-cve-report.json")
     cve.add_argument("--html-output", default="darth-cve-report.html")
     cve.add_argument("--csv-output", default="darth-cve-findings.csv")
+
+    audit = commands.add_parser(
+        "audit-code",
+        help="statically inspect local Python source for security bug candidates",
+    )
+    audit.add_argument("--path", required=True, help="local Python file or source directory")
+    audit.add_argument("--max-files", type=int, default=1000, help="maximum Python files to inspect (1-10000)")
+    audit.add_argument("--output", default="darth-source-report.json")
+    audit.add_argument("--html-output", default="darth-source-report.html")
+    audit.add_argument("--csv-output", default="darth-source-findings.csv")
     return parser
 
 
@@ -71,7 +82,8 @@ def _print_finding_summary(findings) -> None:
 def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
                   findings: list, software: list[dict] | None = None,
                   fuzz_observations: list[dict] | None = None,
-                  exposure_paths_checked: int = 0, tls_probes: int = 0) -> dict:
+                  exposure_paths_checked: int = 0, tls_probes: int = 0,
+                  source_files_reviewed: int = 0, source_files_skipped: int = 0) -> dict:
     return write_report_bundle(
         args.output, args.html_output, args.csv_output,
         target=target,
@@ -82,12 +94,33 @@ def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
         software_components=software,
         exposure_paths_checked=exposure_paths_checked,
         tls_probes=tls_probes,
+        source_files_reviewed=source_files_reviewed,
+        source_files_skipped=source_files_skipped,
     )
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        if args.command == "audit-code":
+            if not 1 <= args.max_files <= 10000:
+                raise ValueError("--max-files must be between 1 and 10000.")
+            findings, reviewed, skipped = audit_python_source(args.path, max_files=args.max_files)
+            _write_bundle(
+                args,
+                target=str(args.path),
+                requests_made=0,
+                pages=[],
+                findings=findings,
+                source_files_reviewed=reviewed,
+                source_files_skipped=skipped,
+            )
+            print(f"Python source files reviewed: {reviewed}; skipped: {skipped}.")
+            print("These are static-review leads, not proof of a zero-day or exploitability.")
+            _print_finding_summary(findings)
+            print(f"JSON: {args.output}\nHTML: {args.html_output}\nCSV: {args.csv_output}")
+            return 0
+
         if args.command == "cve":
             components = load_inventory(args.inventory)
             feed = load_nvd_feed(args.nvd_json)
