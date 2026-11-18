@@ -4,7 +4,7 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.3.0 capabilities
+## Version 0.4.0 capabilities
 
 ### 1. Website security checks
 
@@ -69,11 +69,29 @@ CVSS v2 has no Critical tier; scores 7.0–10.0 are High.
 
 ### 6. Fuzzing
 
-- A conservative GET query-parameter fuzzer with 20 bounded, benign mutation values.
+- A conservative GET query-parameter fuzzer with 32 bounded, benign mutation values and anomaly evidence.
 - One request at a time, fixed minimum delay, bounded request count, and no redirects, form submissions, credential guessing, uploads, or exploit payload execution.
-- Status changes, 5xx responses, large response-size changes, and slow responses are recorded as triage signals, not confirmed vulnerabilities.
+- Status changes, 5xx responses, diagnostic signatures, content-type changes, response hashes, input reflection, large response-size changes, and slow responses are recorded as triage signals, not confirmed vulnerabilities.
 
-### 7. Detailed findings and exports
+### 7. Zero-day research mode (local source audit)
+
+The `audit-code` command performs deterministic static analysis of local Python source files you own. It does not execute your application or any code it scans. It looks for review leads such as:
+
+- Dynamic code execution through eval/exec.
+- Potential unsafe pickle/dill/marshal and YAML deserialization.
+- Shell-enabled subprocess calls and OS shell APIs.
+- SQL statements assembled with f-strings or concatenation.
+- Dynamically supplied HTTP request URLs that may need SSRF controls.
+- Dynamic filesystem paths that need traversal review.
+- Disabled TLS certificate verification.
+- Hard-coded credential-like assignments (values are redacted in findings).
+- Legacy MD5/SHA-1 hashing.
+
+These are heuristic findings, not confirmed zero-days. Static analysis cannot prove whether input is attacker-controlled or whether a vulnerable path is reachable. The current source auditor supports Python only; other languages are not silently treated as audited.
+
+An unknown vulnerability can also be investigated through the bounded `fuzz` command on an explicitly authorized endpoint. It compares responses and flags behavior changes for manual review. This is black-box anomaly research, not coverage-guided binary fuzzing, and does not automatically exploit or prove a flaw.
+
+### 8. Detailed findings and exports
 
 Every finding can include:
 - Stable finding ID.
@@ -149,10 +167,10 @@ darth-scanner cve --inventory .\asset-inventory.json --nvd-json .\nvdcve-2.0-rec
 Use a specific GET URL containing the parameter to be mutated. Prefer a staging application or local test service:
 
 ```powershell
-darth-scanner fuzz --url "https://example.test/search?q=baseline" --param q --scope scope.json --acknowledge-authorization --max-cases 20
+darth-scanner fuzz --url "https://example.test/search?q=baseline" --param q --scope scope.json --acknowledge-authorization --max-cases 32
 ```
 
-The fuzzer sends one baseline request plus up to 20 benign mutations. It does not execute SQL injection or XSS payloads. All observations require manual review.
+The fuzzer sends one baseline request plus up to 32 bounded benign mutations. It records response hashes, response metadata, error signatures, and whether the input appears verbatim in the response. It does not execute SQL injection or XSS payloads. All observations require manual review.
 
 ## Scope file
 
@@ -168,6 +186,18 @@ The fuzzer sends one baseline request plus up to 20 benign mutations. It does no
 ```
 
 Host matching is exact: adding `example.test` does not authorize `api.example.test`. Add every authorized host explicitly. Do not put credentials, session cookies, or secrets in this file. Real `scope.json` files are ignored by Git.
+
+## Run local zero-day research checks
+
+Run the static audit against a local Python project you own:
+
+```powershell
+darth-scanner audit-code --path . --max-files 1000
+```
+
+This creates `darth-source-report.json`, `darth-source-report.html`, and `darth-source-findings.csv`. The audit skips virtual environments, dependency folders, build outputs, and files larger than 2 MB. It never executes source files and redacts credential-like literal values.
+
+Treat results as code-review leads. Confirm reachability, input control, authentication boundaries, and impact before reporting a vulnerability. A true zero-day requires validation and responsible disclosure; the scanner cannot promise to discover one.
 
 ## Finding quality
 
@@ -186,6 +216,7 @@ python -m unittest discover -s tests -v
 darth-scanner --help
 darth-scanner scan --help
 darth-scanner cve --help
+darth-scanner audit-code --help
 ```
 
 GitHub Actions tests Python 3.11, 3.12, and 3.13.
