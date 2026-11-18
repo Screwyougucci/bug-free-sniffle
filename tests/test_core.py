@@ -57,6 +57,12 @@ class FuzzerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mutate_query_parameter("https://owned.example/?lang=en", "q", "c")
 
+    def test_fuzz_corpus_has_twenty_bounded_cases(self):
+        from darthscanner.fuzzer import _variants
+        cases = _variants()
+        self.assertEqual(len(cases), 20)
+        self.assertLessEqual(max(len(value) for _, value in cases), 256)
+
 
 class PassiveChecksTests(unittest.TestCase):
     def test_missing_headers_are_reported_for_html(self):
