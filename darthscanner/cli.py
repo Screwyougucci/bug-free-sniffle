@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 
 from . import __version__
 from .checks import inspect_html, inspect_http
+from .browser_audit import inspect_browser_code
 from .crawler import crawl
 from .cve import load_inventory, load_nvd_feed, match_cves
 from .exposure import probe_sensitive_paths
@@ -15,7 +16,7 @@ from .fingerprint import fingerprint_response
 from .fuzzer import observations_to_dict, run_fuzz
 from .http_client import SafeHttpClient
 from .method_checks import inspect_http_methods
-from .report import write_report_bundle
+from .report import write_report
 from .scope import ScopeError, load_scope, require_authorization
 from .source_audit import audit_python_source
 from .tls_checks import inspect_tls
@@ -36,8 +37,6 @@ def _parser() -> argparse.ArgumentParser:
     scan.add_argument("--nvd-json", help="optional local NVD 2.0 JSON feed for CVE matching")
     scan.add_argument("--inventory", help="optional CPE inventory JSON to add to discovered software")
     scan.add_argument("--output", default="darth-report.json", help="JSON report output")
-    scan.add_argument("--html-output", default="darth-report.html", help="interactive HTML dashboard output")
-    scan.add_argument("--csv-output", default="darth-findings.csv", help="CSV findings output")
 
     fuzz = commands.add_parser("fuzz", help="run bounded, benign GET query-parameter fuzzing")
     fuzz.add_argument("--url", required=True, help="specific GET URL containing the parameter")
@@ -46,15 +45,11 @@ def _parser() -> argparse.ArgumentParser:
     fuzz.add_argument("--acknowledge-authorization", action="store_true")
     fuzz.add_argument("--max-cases", type=int, default=9, help="1-32 benign mutations")
     fuzz.add_argument("--output", default="darth-fuzz-report.json")
-    fuzz.add_argument("--html-output", default="darth-fuzz-report.html")
-    fuzz.add_argument("--csv-output", default="darth-fuzz-findings.csv")
 
     cve = commands.add_parser("cve", help="match a software inventory against a local NVD 2.0 JSON feed")
     cve.add_argument("--inventory", required=True, help="JSON inventory containing CPE 2.3 component identifiers")
     cve.add_argument("--nvd-json", required=True, help="local NVD 2.0 JSON feed")
     cve.add_argument("--output", default="darth-cve-report.json")
-    cve.add_argument("--html-output", default="darth-cve-report.html")
-    cve.add_argument("--csv-output", default="darth-cve-findings.csv")
 
     audit = commands.add_parser(
         "audit-code",
@@ -63,8 +58,6 @@ def _parser() -> argparse.ArgumentParser:
     audit.add_argument("--path", required=True, help="local Python file or source directory")
     audit.add_argument("--max-files", type=int, default=1000, help="maximum Python files to inspect (1-10000)")
     audit.add_argument("--output", default="darth-source-report.json")
-    audit.add_argument("--html-output", default="darth-source-report.html")
-    audit.add_argument("--csv-output", default="darth-source-findings.csv")
     return parser
 
 
@@ -84,8 +77,9 @@ def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
                   fuzz_observations: list[dict] | None = None,
                   exposure_paths_checked: int = 0, tls_probes: int = 0,
                   source_files_reviewed: int = 0, source_files_skipped: int = 0) -> dict:
-    return write_report_bundle(
-        args.output, args.html_output, args.csv_output,
+    """Write the single Notepad-friendly JSON report."""
+    return write_report(
+        args.output,
         target=target,
         requests_made=requests_made,
         pages=pages,
@@ -97,7 +91,6 @@ def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
         source_files_reviewed=source_files_reviewed,
         source_files_skipped=source_files_skipped,
     )
-
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
@@ -118,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Python source files reviewed: {reviewed}; skipped: {skipped}.")
             print("These are static-review leads, not proof of a zero-day or exploitability.")
             _print_finding_summary(findings)
-            print(f"JSON: {args.output}\nHTML: {args.html_output}\nCSV: {args.csv_output}")
+            print(f"JSON: {args.output}")
             return 0
 
         if args.command == "cve":
@@ -130,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
                           pages=[], findings=findings, software=software)
             print(f"Loaded {len(components)} software component(s) and {len(feed)} CVE record(s).")
             _print_finding_summary(findings)
-            print(f"JSON: {args.output}\nHTML: {args.html_output}\nCSV: {args.csv_output}")
+            print(f"JSON: {args.output}")
             return 0
 
         scope = load_scope(args.scope)
@@ -145,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
             for response in responses:
                 findings.extend(inspect_http(response))
                 findings.extend(inspect_html(response))
+                findings.extend(inspect_browser_code(response))
                 for component in fingerprint_response(response):
                     components_by_cpe[component.cpe] = component
 
