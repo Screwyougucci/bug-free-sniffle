@@ -1,30 +1,61 @@
 # Bug-Free Sniffle — Web & Server Security Scanner
 
-A conventional Python security scanner for websites and server software you own or are explicitly authorized to assess. **This project does not use AI, LLMs, or generative analysis.** Detection is implemented through deterministic checks, HTTP response inspection, software fingerprints, CVE databases, and bounded fuzzing.
+A conventional Python security scanner for websites and server software you own or are explicitly authorized to assess. **No AI, LLMs, or generative analysis.** Detection is implemented through deterministic HTTP/TLS checks, passive software fingerprints, local CVE data, and bounded fuzzing.
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.2.0 capabilities
+## Version 0.3.0 capabilities
 
-### Website and server checks
+### 1. Website security checks
 
 - Bounded same-origin HTML crawling. Forms are never submitted and JavaScript is never executed.
 - HTTP security headers: CSP, HSTS, MIME sniffing protection, Referrer-Policy, Permissions-Policy, and clickjacking controls.
 - CSP analysis: unsafe-inline, unsafe-eval, wildcard script sources, missing object-src, base-uri, and frame-ancestors.
-- CORS observations: wildcard origins, null origins, and invalid wildcard/credential combinations.
+- CORS observations: wildcard origins, null origins, and credential-policy combinations.
 - Cookie analysis: Secure, HttpOnly, SameSite, SameSite=None without Secure, and __Host-/__Secure- prefix rules.
 - Cache-control review when responses set cookies.
 - HTML checks: mixed content, password forms using GET or non-HTTPS actions, cross-origin password form actions, external scripts without SRI, and target-blank links without opener isolation.
-- Response checks for directory-index signatures, common debug pages, stack traces, database error disclosures, and server 5xx responses.
-- TLS certificate trust and expiry checks.
-- Passive server version fingerprinting from Server, X-Powered-By, and Via response headers for known products including nginx, Apache HTTP Server, PHP, Microsoft IIS, OpenSSL, and OpenResty.
+- Redirect checks: HTTPS-to-HTTP downgrade redirects and cross-origin redirects. Redirects are never followed and an external redirect is not automatically labelled an open redirect.
+- Authentication check: Basic authentication advertised over plaintext HTTP.
+- Error and information disclosure: directory-index signatures, common debug pages, stack traces, database error messages, and server 5xx responses.
+- HTTP method discovery through OPTIONS. TRACE, PUT, DELETE, and CONNECT are reported only when advertised; the scanner does not invoke these methods.
 
-### CVE intelligence and severity
+### 2. Exposed configuration and backup discovery
+
+The scanner sends **HEAD requests only** to a bounded list of likely sensitive paths, such as:
+
+- Environment files and local/production variants.
+- Git, Subversion, and Mercurial metadata.
+- Private SSH key filenames.
+- Common application configuration backups.
+- SQL dump and backup archive filenames.
+- PHP diagnostic page and common operating-system metadata.
+
+It records only response status and headers such as Content-Type and Content-Length. It does **not** download, parse, save, or display file contents. If a server returns a generic HTML fallback for every path, the result is marked low-confidence and requires manual verification. HEAD support varies by server; a negative HEAD result does not prove that a file is absent or inaccessible through GET.
+
+### 3. TLS and certificate assessment
+
+- Verified certificate-chain and hostname handshake.
+- Certificate expiration and near-expiration checks.
+- Protocol-specific handshakes for TLS 1.0, 1.1, 1.2, and 1.3.
+- Reports when deprecated TLS 1.0 or TLS 1.1 accepts a handshake.
+- A restricted handshake against selected legacy cipher families (RC4, 3DES/DES, NULL, export-grade, anonymous, and MD5-based suites).
+- Records the negotiated protocol and cipher suite.
+
+The local Python/OpenSSL build may not include obsolete cipher implementations. If a legacy cipher cannot be offered by the scanner itself, that cipher test is reported as not observable rather than a clean result. Protocol negotiation is based on the scanner's TLS implementation and network path; this is not a complete cryptographic compliance certification. TLS guidance reference: [NIST SP 800-52 Rev. 2](https://csrc.nist.gov/pubs/sp/800/52/r2/final). NIST announced a review of this publication in May 2026; this scanner reports observed capabilities rather than claiming formal compliance.
+
+### 4. Server and software fingerprints
+
+Versioned response-header fingerprints now include nginx, Apache HTTP Server, PHP, Microsoft IIS, OpenSSL, OpenResty, Caddy, lighttpd, HAProxy, Envoy, Traefik, Eclipse Jetty, Apache Tomcat, Gunicorn, Uvicorn, Varnish Cache, and Node.js.
+
+Fingerprints are based on publicly returned headers and can be hidden, spoofed, or altered by reverse proxies. A missing fingerprint does not mean that software is absent. Use a trusted software inventory or SBOM for better coverage.
+
+### 5. CVE intelligence and CVSS severity
 
 - Matches CPE 2.3 software inventory against a local NVD 2.0 JSON feed.
-- Uses NVD's published affected CPE criteria and version boundaries where those are numeric dotted versions.
-- Includes CVE ID, English description, CVSS version, base score, vector, qualitative severity, matching CPE evidence, and NVD/advisory references.
-- Supports auto-detected server banner fingerprints plus a manually supplied inventory for software not exposed in response headers.
+- Uses NVD affected CPE criteria and numeric dotted-version boundaries where supported.
+- Includes CVE ID, English description, CVSS version, base score, vector, severity, matched software/version evidence, and NVD/advisory links.
+- Uses detected software fingerprints and optional user-provided inventory.
 
 CVSS severity bands:
 - **Critical:** 9.0–10.0 (CVSS v3.x/v4.0)
@@ -34,14 +65,31 @@ CVSS severity bands:
 
 CVSS v2 has no Critical tier; scores 7.0–10.0 are High.
 
-**CVE matches are candidates, not proof of exposure.** A product banner may be spoofed, NVD configuration expressions can require additional platform conditions, and vendors sometimes backport fixes without changing the upstream version string. Verify the exact vendor build, complete configuration, and advisory before treating a match as exploitable.
+**CVE matches are candidates, not proof of exposure.** A product banner may be spoofed, NVD configuration expressions can require additional platform conditions, and vendors sometimes backport fixes without changing the upstream version string. Verify the exact vendor build, platform conditions, and advisory before treating a match as exploitable.
 
-### Fuzzing and reports
+### 6. Fuzzing
 
 - A conservative GET query-parameter fuzzer with 20 bounded, benign mutation values.
 - One request at a time, fixed minimum delay, bounded request count, and no redirects, form submissions, credential guessing, uploads, or exploit payload execution.
-- JSON reports include a stable finding ID, description, impact, evidence, CWE identifiers and references where mapped, affected component, severity, confidence, remediation steps, CVSS metadata, references, scan coverage, page status totals, and software inventory.
-- Findings are sorted by severity and CVSS score; duplicate finding IDs are collapsed.
+- Status changes, 5xx responses, large response-size changes, and slow responses are recorded as triage signals, not confirmed vulnerabilities.
+
+### 7. Detailed findings and exports
+
+Every finding can include:
+- Stable finding ID.
+- Description, impact, affected URL/component, and observed evidence.
+- Severity, qualitative confidence, and a numeric confidence score.
+- CWE identifier(s) with MITRE references where mapped.
+- CVE identifier(s), CVSS version, score, and vector where applicable.
+- Remediation summary and practical remediation steps.
+
+Each scan automatically writes three files:
+
+- `darth-report.json` — full machine-readable report and coverage totals.
+- `darth-report.html` — self-contained dashboard with search, severity, CWE, and minimum-CVSS filters.
+- `darth-findings.csv` — one row per deduplicated finding.
+
+The dashboard works locally in a browser and does not upload scan results anywhere. CSV and HTML contain finding metadata, not fetched file contents.
 
 ## Install
 
@@ -74,68 +122,37 @@ Edit `scope.json`: set `authorized` to `true` only after confirming permission, 
 
 ## Run a website scan
 
-```bash
-python -m darthscanner scan --target https://example.test --scope scope.json --acknowledge-authorization
+```powershell
+darth-scanner scan --target https://example.test --scope scope.json --acknowledge-authorization
 ```
 
-The default report is `darth-report.json`.
+By default, this creates JSON, HTML, and CSV reports. Override paths with `--output`, `--html-output`, and `--csv-output`.
 
 ## Run a scan with CVE matching
 
-Download an NVD 2.0 JSON feed from the official <https://nvd.nist.gov/vuln/data-feeds> page. Then pass the feed path:
+Download an NVD 2.0 JSON feed from the official [NVD data feeds page](https://nvd.nist.gov/vuln/data-feeds), then pass its path:
 
-```bash
-python -m darthscanner scan \
-  --target https://example.test \
-  --scope scope.json \
-  --acknowledge-authorization \
-  --nvd-json ./nvdcve-2.0-recent.json
+```powershell
+darth-scanner scan --target https://example.test --scope scope.json --acknowledge-authorization --nvd-json .\nvdcve-2.0-recent.json
 ```
 
-Only software versions visible in response headers can be fingerprinted automatically. To check additional installed components, prepare a CPE inventory such as `asset-inventory.example.json` and add `--inventory ./asset-inventory.json`.
+To check additional installed components not visible in response headers, prepare a CPE inventory such as `asset-inventory.example.json` and add `--inventory .\asset-inventory.json`.
 
-You can also run the CVE matcher separately against an inventory and local NVD feed without sending any network requests:
+You can also run the CVE matcher separately without sending any network requests:
 
-```bash
-python -m darthscanner cve \
-  --inventory ./asset-inventory.json \
-  --nvd-json ./nvdcve-2.0-recent.json
+```powershell
+darth-scanner cve --inventory .\asset-inventory.json --nvd-json .\nvdcve-2.0-recent.json
 ```
-
-The default CVE-only report is `darth-cve-report.json`.
-
-## Software inventory format
-
-Each component should include a CPE 2.3 identifier. Example:
-
-```json
-{
-  "components": [
-    {
-      "name": "nginx",
-      "version": "1.18.0",
-      "cpe": "cpe:2.3:a:nginx:nginx:1.18.0:*:*:*:*:*:*:*"
-    }
-  ]
-}
-```
-
-Use exact vendor/product identifiers from the software vendor or an SBOM. The sample inventory contains illustrative versions only; it does not describe your actual server.
 
 ## Run the bounded fuzzer
 
 Use a specific GET URL containing the parameter to be mutated. Prefer a staging application or local test service:
 
-```bash
-python -m darthscanner fuzz \
-  --url 'https://example.test/search?q=baseline' \
-  --param q \
-  --scope scope.json \
-  --acknowledge-authorization \
-  --max-cases 20
+```powershell
+darth-scanner fuzz --url "https://example.test/search?q=baseline" --param q --scope scope.json --acknowledge-authorization --max-cases 20
 ```
 
-The fuzzer sends one baseline request plus up to 20 benign mutations. It does not execute SQL injection or XSS payloads. Unusual 5xx responses, status changes, large response-size changes, and slow responses are triage signals requiring manual review—not confirmed vulnerabilities.
+The fuzzer sends one baseline request plus up to 20 benign mutations. It does not execute SQL injection or XSS payloads. All observations require manual review.
 
 ## Scope file
 
@@ -157,15 +174,14 @@ Host matching is exact: adding `example.test` does not authorize `api.example.te
 - **Finding:** a concrete observed weakness or misconfiguration.
 - **Observation:** information disclosure or a hardening opportunity.
 - **Candidate vulnerability:** a version/CPE match to a published CVE; verify the vendor advisory, configuration, and patch status.
+- **Candidate exposure:** a HEAD response indicates a sensitive-looking path may be reachable; confirm internally without exposing the contents.
 - **Fuzz anomaly:** a response difference that needs manual reproduction.
 
-Where applicable, findings include CWE identifiers linked to the MITRE CWE definitions. CVE matches include CVSS version, base score, vector, and severity.
-
-No automatic exploit execution is included. Always validate findings before assigning real-world risk.
+The scanner does not automatically exploit findings. It is designed to identify candidates and produce evidence for authorized security review.
 
 ## Tests
 
-```bash
+```powershell
 python -m unittest discover -s tests -v
 darth-scanner --help
 darth-scanner scan --help
@@ -173,20 +189,6 @@ darth-scanner cve --help
 ```
 
 GitHub Actions tests Python 3.11, 3.12, and 3.13.
-
-## Roadmap
-
-- [x] Strict target scope and request budget
-- [x] Same-origin bounded crawler
-- [x] Expanded HTTP, cookie, HTML, TLS, debug/error, and directory-index checks
-- [x] Passive software version fingerprinting
-- [x] Offline NVD/CPE CVE matching with CVSS ratings
-- [x] Detailed JSON reports, CWE mappings, and coverage summaries
-- [x] Bounded GET parameter fuzzer
-- [ ] More server product fingerprints and version parsing
-- [ ] Additional TLS protocol/cipher observations
-- [ ] HTML report viewer and CSV export
-- [ ] More integration fixtures and false-positive regression tests
 
 ## License
 
