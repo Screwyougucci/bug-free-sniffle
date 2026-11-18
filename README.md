@@ -40,7 +40,7 @@ CVSS v2 has no Critical tier; scores 7.0–10.0 are High.
 
 - A conservative GET query-parameter fuzzer with 20 bounded, benign mutation values.
 - One request at a time, fixed minimum delay, bounded request count, and no redirects, form submissions, credential guessing, uploads, or exploit payload execution.
-- JSON reports include a stable finding ID, description, impact, evidence, affected component, severity, confidence, remediation steps, CVSS metadata, references, scan coverage, page status totals, and software inventory.
+- JSON reports include a stable finding ID, description, impact, evidence, CWE identifiers and references where mapped, affected component, severity, confidence, remediation steps, CVSS metadata, references, scan coverage, page status totals, and software inventory.
 - Findings are sorted by severity and CVSS score; duplicate finding IDs are collapsed.
 
 ## Install
@@ -159,6 +159,8 @@ Host matching is exact: adding `example.test` does not authorize `api.example.te
 - **Candidate vulnerability:** a version/CPE match to a published CVE; verify the vendor advisory, configuration, and patch status.
 - **Fuzz anomaly:** a response difference that needs manual reproduction.
 
+Where applicable, findings include CWE identifiers linked to the MITRE CWE definitions. CVE matches include CVSS version, base score, vector, and severity.
+
 No automatic exploit execution is included. Always validate findings before assigning real-world risk.
 
 ## Tests
@@ -179,7 +181,7 @@ GitHub Actions tests Python 3.11, 3.12, and 3.13.
 - [x] Expanded HTTP, cookie, HTML, TLS, debug/error, and directory-index checks
 - [x] Passive software version fingerprinting
 - [x] Offline NVD/CPE CVE matching with CVSS ratings
-- [x] Detailed JSON reports and coverage summaries
+- [x] Detailed JSON reports, CWE mappings, and coverage summaries
 - [x] Bounded GET parameter fuzzer
 - [ ] More server product fingerprints and version parsing
 - [ ] Additional TLS protocol/cipher observations
