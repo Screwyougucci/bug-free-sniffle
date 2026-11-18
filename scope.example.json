@@ -1,0 +1,8 @@
+{
+  "authorized": false,
+  "allowed_hosts": ["replace-with-your-owned-host.example"],
+  "max_pages": 30,
+  "max_requests": 50,
+  "request_delay_seconds": 1.0,
+  "timeout_seconds": 8
+}
