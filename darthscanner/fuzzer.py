@@ -34,7 +34,7 @@ def _variants() -> list[tuple[str, str]]:
         ("medium-boundary", "A" * 128),
         ("bounded-long", "A" * 256),
         ("whitespace", " value with spaces "),
-        ("tabs", "\\tvalue\\t"),
+        ("tabs", "\tvalue\t"),
         ("unicode", "café-東京-🙂"),
         ("reserved-characters", "a&b=c?d#e"),
         ("percent-literal", "100%25"),
