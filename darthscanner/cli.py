@@ -44,7 +44,7 @@ def _parser() -> argparse.ArgumentParser:
     fuzz.add_argument("--param", required=True, help="exact query parameter name to mutate")
     fuzz.add_argument("--scope", default="scope.json")
     fuzz.add_argument("--acknowledge-authorization", action="store_true")
-    fuzz.add_argument("--max-cases", type=int, default=9, help="1-20 benign mutations")
+    fuzz.add_argument("--max-cases", type=int, default=9, help="1-32 benign mutations")
     fuzz.add_argument("--output", default="darth-fuzz-report.json")
     fuzz.add_argument("--html-output", default="darth-fuzz-report.html")
     fuzz.add_argument("--csv-output", default="darth-fuzz-findings.csv")
@@ -187,8 +187,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"JSON: {args.output}\nHTML: {args.html_output}\nCSV: {args.csv_output}")
             return 0
 
-        if args.max_cases < 1 or args.max_cases > 20:
-            raise ValueError("--max-cases must be between 1 and 20.")
+        if args.max_cases < 1 or args.max_cases > 32:
+            raise ValueError("--max-cases must be between 1 and 32.")
         scope.validate_url(args.url)
         client = SafeHttpClient(scope, max_requests=min(scope.max_requests, args.max_cases + 1))
         observations = run_fuzz(args.url, args.param, scope, client, args.max_cases)
