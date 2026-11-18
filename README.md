@@ -4,7 +4,7 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.7.0 capabilities
+## Version 0.8.0 capabilities
 
 ### 1. Website security checks
 
@@ -76,7 +76,17 @@ CVSS v2 has no Critical tier; scores 7.0–10.0 are High.
 - One request at a time with the scope's minimum delay and shared request budget. No forms, uploads, credentials, redirect following, exploit payloads, or state-changing methods.
 - A changed response is only a lead: dynamic pages, personalization, and cache behavior can cause harmless differences. Reproduce and inspect manually.
 
-### 7. Zero-day research mode (local source audit)
+### 8. Response-behavior and parser-ambiguity research
+
+The scanner now passively inspects response bodies already collected by the bounded crawler for:
+- Duplicate JSON object member names, which can be interpreted differently by different parsers.
+- Successful JSON responses that contain HTML, malformed JSON, or inconsistent media types.
+- Successful responses containing generic exception/diagnostic signatures.
+- Evidence is limited to the anomaly description; response bodies, JSON values, and duplicate member names are not copied into findings.
+
+These checks add protocol and parser-differential coverage without sending additional requests. A duplicate key or media-type mismatch is a bug candidate, not automatically a security vulnerability. Confirm how the actual application, API gateway, and downstream consumers parse the response.
+
+### 9. Zero-day research mode (local source audit)
 
 The `audit-code` command performs deterministic static analysis of local Python source files you own. It does not execute your application or any code it scans. It looks for review leads such as:
 
