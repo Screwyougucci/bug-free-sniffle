@@ -210,17 +210,17 @@ def match_cves(components: list[SoftwareComponent], feed: list[dict[str, Any]]) 
                 if match_value := next((m.get(name) for node in config for m in _walk_cpe_matches(node)
                                         if str(m.get("criteria")) == criteria and m.get(name)), None):
                     range_text.append(f"{name}={match_value}")
-            evidence = f"Detected {component.name} {component.version} ({component.cpe}); matched NVD CPE criteria {criteria}."
+            evidence = f"Detected {component.name} {component.version} ({component.cpe}); matched NVD CPE criteria {criteria}. This is a candidate match; validate NVD configuration logic, vendor build details, and backported fixes."
             if range_text:
                 evidence += " Version constraints: " + ", ".join(range_text) + "."
             findings.append(Finding(
                 category="cve",
                 title=f"{cve_id}: {component.name} {component.version} may be affected",
                 severity=severity,
-                confidence="medium",
+                confidence="medium" if component.confidence == "high" else "low",
                 url="asset-inventory",
                 evidence=evidence,
-                remediation="Verify the installed vendor build and affected-version range, then upgrade to a vendor-fixed release or apply the vendor mitigation. Check the linked advisory before changing production systems.",
+                remediation="Verify the exact installed vendor build and affected-version range, including vendor backports. Upgrade to a vendor-fixed release or apply the vendor mitigation; check the linked advisory before changing production systems.",
                 kind="candidate-vulnerability",
                 description=description,
                 impact="Potential impact is described by the CVE record. Actual impact depends on the deployed configuration, reachable attack surface, and vendor backports.",
