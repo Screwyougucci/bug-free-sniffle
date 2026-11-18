@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from darthscanner.checks import inspect_http
+from darthscanner.checks import inspect_html, inspect_http
 from darthscanner.fuzzer import mutate_query_parameter
 from darthscanner.http_client import HttpResponse
 from darthscanner.scope import Scope, ScopeError, load_scope, require_authorization
@@ -74,8 +74,48 @@ class PassiveChecksTests(unittest.TestCase):
         self.assertNotIn("Content Security Policy is missing", titles)
         self.assertNotIn("Referrer-Policy is missing", titles)
         self.assertNotIn("Permissions-Policy is missing", titles)
-        # HSTS is a site-wide HTTPS policy and also applies to non-HTML responses.
         self.assertIn("HSTS header is missing", titles)
+
+    def test_csp_unsafe_directives_are_flagged(self):
+        response = HttpResponse("https://owned.example/", 200, {
+            "content-type": "text/html",
+            "content-security-policy": "default-src *; script-src 'unsafe-inline' 'unsafe-eval'",
+        }, b"<html></html>", 0.1)
+        titles = {finding.title for finding in inspect_http(response)}
+        self.assertIn("CSP permits inline scripts", titles)
+        self.assertIn("CSP permits eval-like script execution", titles)
+        self.assertIn("CSP script source permits a wildcard", titles)
+
+    def test_wildcard_cors_is_observation_not_confirmed_vulnerability(self):
+        response = HttpResponse("https://owned.example/api", 200, {
+            "content-type": "application/json",
+            "access-control-allow-origin": "*",
+        }, b"{}", 0.1)
+        finding = next(f for f in inspect_http(response) if f.category == "cors")
+        self.assertEqual(finding.kind, "observation")
+        self.assertEqual(finding.severity, "info")
+
+    def test_mixed_content_is_reported(self):
+        response = HttpResponse("https://owned.example/", 200,
+                                {"content-type": "text/html"},
+                                b'<script src="http://cdn.example/app.js"></script>', 0.1)
+        titles = {finding.title for finding in inspect_html(response)}
+        self.assertIn("HTTPS page references an insecure HTTP resource", titles)
+
+    def test_password_get_form_is_reported(self):
+        response = HttpResponse("https://owned.example/login", 200,
+                                {"content-type": "text/html"},
+                                b'<form><input type="password" name="pw"></form>', 0.1)
+        titles = {finding.title for finding in inspect_html(response)}
+        self.assertIn("Password form uses GET", titles)
+
+    def test_external_script_without_sri_is_observation(self):
+        response = HttpResponse("https://owned.example/", 200,
+                                {"content-type": "text/html"},
+                                b'<script src="https://cdn.example/app.js"></script>', 0.1)
+        finding = next(f for f in inspect_html(response)
+                       if f.title == "Cross-origin script has no Subresource Integrity attribute")
+        self.assertEqual(finding.kind, "finding")
 
 
 if __name__ == "__main__":
