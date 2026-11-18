@@ -2,31 +2,61 @@
 
 A scope-controlled web security assessment tool for systems you own or are explicitly authorized to test.
 
-> **No scanner can guarantee a fixed number of vulnerabilities.** This project reports evidence-backed findings and coverage counts. It never invents findings to satisfy a target.
+> **No scanner can guarantee a fixed number of vulnerabilities.** Bug-Free Sniffle reports observed issues with evidence and confidence; it never invents findings to reach a target count.
 
-## What it does
+## Current capabilities
 
-- Same-origin, bounded HTML link crawling.
-- Passive checks for HTTP security headers, cookie flags, TLS certificate validity, and server-banner disclosure.
-- A deliberately conservative **GET query-parameter fuzzer** for robustness testing. It uses benign boundary, encoding, whitespace, Unicode, and type-like values; it does not attempt exploitation, authentication bypass, data extraction, or denial of service.
-- JSON reports with evidence, severity, confidence, and remediation.
-- Exact-host scope allowlisting, explicit authorization acknowledgement, request ceilings, timeouts, and a minimum request interval.
-- Unit tests and CI.
+- Same-origin, bounded HTML crawling. Forms are never submitted and JavaScript is never executed.
+- HTTP checks: CSP presence and risky directives, HSTS presence and short max-age, MIME sniffing protection, Referrer-Policy, Permissions-Policy, CORS wildcard behavior, cache behavior for cookie-setting responses, and server technology banners.
+- Cookie checks: Secure, HttpOnly, SameSite, SameSite=None without Secure.
+- HTML checks: mixed-content references, password forms using GET, password forms resolving to non-HTTPS actions, cross-origin scripts without Subresource Integrity, and target-blank links without opener isolation.
+- TLS certificate trust and expiry checks.
+- A conservative **GET query-parameter fuzzer** using benign empty, numeric, boundary-length, whitespace, Unicode, and reserved-character values.
+- JSON reports containing evidence, severity, confidence, remediation, page inventory, and fuzz anomalies.
+- Exact-host allowlisting, explicit authorization acknowledgement, bounded requests, request delays, timeouts, and no automatic redirect following.
 
-## Quick start
+These are detection checks and review signals—not a promise of 50 exploitable bugs. A well-secured site may produce zero vulnerability findings. The safe fuzzer does not attempt SQL injection, XSS execution, authentication bypass, data extraction, or denial of service.
 
-Requires Python 3.11+; no third-party packages are required.
+## Install
 
-1. Copy `scope.example.json` to `scope.json`.
-2. Set `authorized` to `true` only after confirming you have permission.
-3. Add the exact hostname(s) you are permitted to assess.
-4. Run a passive scan:
+Requires Python 3.11+; runtime uses only the Python standard library.
+
+### Windows PowerShell
+
+```powershell
+git clone https://github.com/Screwyougucci/bug-free-sniffle.git
+cd bug-free-sniffle
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+Copy-Item scope.example.json scope.json
+notepad scope.json
+```
+
+### Linux / macOS
+
+```bash
+git clone https://github.com/Screwyougucci/bug-free-sniffle.git
+cd bug-free-sniffle
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e .
+cp scope.example.json scope.json
+```
+
+Edit `scope.json`: set `authorized` to `true` only after confirming permission, and replace the example hostname with the exact hostname you are authorized to test. The example file defaults to `authorized: false`.
+
+## Run a passive scan
 
 ```bash
 python -m darthscanner scan --target https://example.test --scope scope.json --acknowledge-authorization
 ```
 
-Run the safe query fuzzer against a specific GET URL and parameter:
+The report is written to `darth-report.json` by default. You can choose another path with `--output`.
+
+## Run the safe fuzzer
+
+Use a specific GET URL containing the parameter to be mutated. Run it against a staging system or a local test app:
 
 ```bash
 python -m darthscanner fuzz \
@@ -36,7 +66,7 @@ python -m darthscanner fuzz \
   --acknowledge-authorization
 ```
 
-Use only a staging target or a local lab for fuzzing. The fuzzer defaults to at most 20 requests, one request at a time, with a minimum 1-second delay. It will not follow redirects, submit forms, or send requests to hosts outside the exact allowlist.
+The fuzzer sends one request at a time, uses the configured delay (minimum 0.5 seconds), defaults to 9 mutations plus one baseline request, and limits a run to at most 20 mutations. It does not follow redirects, submit forms, brute-force credentials, upload files, or access other hosts. Unusual 5xx responses, status changes, large response-size changes, or slow responses are reported as **triage signals**, not confirmed vulnerabilities.
 
 ## Scope file
 
@@ -51,47 +81,36 @@ Use only a staging target or a local lab for fuzzing. The fuzzer defaults to at 
 }
 ```
 
-Do not include credentials, session cookies, or secrets in scope files. Keep real scope files out of source control.
+Host matching is exact: adding `example.test` does not authorize `api.example.test`. Add every authorized host explicitly. Do not put credentials, session cookies, or secrets in this file. Real `scope.json` files are ignored by Git.
 
-## Fuzzing safety model
+## Findings are not all vulnerabilities
 
-The fuzzer:
-- Uses GET only and mutates only the named query parameter.
-- Uses short, non-exploit test strings and small boundary values.
-- Caps the number of requests at 20 by default and 30 absolutely.
-- Enforces at least 0.5 seconds between requests.
-- Does not follow redirects, crawl discovered links, brute-force credentials, or upload files.
-- Records response status, length, and elapsed time as **anomalies**, not proof of a vulnerability.
+- **Finding**: a concrete observed weakness or misconfiguration.
+- **Observation**: information disclosure or a hardening opportunity.
+- **Fuzz anomaly**: a response difference that requires manual reproduction and review.
 
-Do not run it against third-party systems without written authorization. For invasive testing, use a purpose-built lab and a separately reviewed test plan.
+No exploit execution is included. Always validate findings manually and review application/server logs before assigning severity.
 
-## Finding quality
-
-A scanner alert is not automatically an exploitable vulnerability. Each report distinguishes:
-- **Finding**: a concrete observed issue, such as a missing security header.
-- **Observation**: a version/banner or behavior worth investigating.
-- **Fuzz anomaly**: an unusual response that requires manual review.
-
-No automatic exploit execution is included.
-
-## Development
+## Test
 
 ```bash
 python -m unittest discover -s tests -v
 python -m darthscanner --help
 ```
 
+GitHub Actions runs the unit tests on Python 3.11, 3.12, and 3.13.
+
 ## Roadmap
 
-- [x] Strict scope enforcement and request budget
+- [x] Exact-host scope enforcement and request budget
 - [x] Same-origin bounded crawler
-- [x] Passive HTTP and TLS checks
-- [x] Safe GET parameter fuzzing
-- [x] JSON report output
-- [ ] OpenAPI document inventory and schema-aware non-destructive fuzzing
-- [ ] Local CVE feed import and software inventory matching
+- [x] Passive HTTP, cookie, HTML, and TLS checks
+- [x] Safe GET query-parameter fuzzing
+- [x] JSON evidence reports
+- [ ] OpenAPI inventory and schema-aware non-destructive API fuzzing
+- [ ] Local CVE feed import and cautious software-version matching
 - [ ] HTML report viewer
-- [ ] Additional regression fixtures
+- [ ] Additional regression fixtures and integration tests
 
 ## License
 
