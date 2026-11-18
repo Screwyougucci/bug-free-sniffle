@@ -18,7 +18,7 @@ class CveMatchingTests(unittest.TestCase):
             source="test fixture",
         )
         self.feed = [{
-            "id": "CVE-2021-44228",
+            "id": "CVE-2099-00001",
             "descriptions": [{"lang": "en", "value": "Example test description."}],
             "metrics": {
                 "cvssMetricV31": [{
@@ -57,13 +57,13 @@ class CveMatchingTests(unittest.TestCase):
         findings = match_cves([self.component], self.feed)
         self.assertEqual(len(findings), 1)
         finding = findings[0]
-        self.assertEqual(finding.cve_ids, ["CVE-2021-44228"])
+        self.assertEqual(finding.cve_ids, ["CVE-2099-00001"])
         self.assertEqual(finding.cvss_score, 9.8)
         self.assertEqual(finding.cvss_version, "3.1")
         self.assertEqual(finding.severity, "critical")
         self.assertEqual(finding.kind, "candidate-vulnerability")
         self.assertIn("versionEndExcluding=1.20.0", finding.evidence)
-        self.assertIn("https://nvd.nist.gov/vuln/detail/CVE-2021-44228", finding.references)
+        self.assertIn("https://nvd.nist.gov/vuln/detail/CVE-2099-00001", finding.references)
         self.assertIn("vendor backports", finding.remediation.lower())
 
     def test_nonmatching_product_is_not_reported(self):
