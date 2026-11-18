@@ -6,6 +6,8 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 
+from . import __version__
+
 
 _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4, "none": 5}
 
@@ -42,7 +44,7 @@ def write_report(path: str, *, target: str, requests_made: int,
     cve_findings = [item for item in normalized if item.category == "cve"]
     payload = {
         "tool": "Darth Scanner",
-        "version": "0.1.0",
+        "version": __version__,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "target": target,
         "coverage": {
