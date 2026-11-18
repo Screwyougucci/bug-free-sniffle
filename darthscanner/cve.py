@@ -27,8 +27,9 @@ class CveRecord:
     criteria: tuple[str, ...]
 
 
-def severity_from_cvss(score: float | None, supplied: str | None = None) -> str:
-    """Map CVSS base score to standard qualitative severity bands."""
+def severity_from_cvss(score: float | None, supplied: str | None = None,
+                       version: str | None = None) -> str:
+    """Map a CVSS base score to its version-appropriate qualitative band."""
     if score is None:
         value = (supplied or "").strip().lower()
         return value if value in {"critical", "high", "medium", "low"} else "info"
@@ -38,6 +39,9 @@ def severity_from_cvss(score: float | None, supplied: str | None = None) -> str:
         return "low"
     if score < 7.0:
         return "medium"
+    # CVSS v2 defines Low/Medium/High only; 7.0-10.0 is High, not Critical.
+    if str(version or "").startswith("2"):
+        return "high"
     if score < 9.0:
         return "high"
     return "critical"
@@ -184,7 +188,7 @@ def match_cves(components: list[SoftwareComponent], feed: list[dict[str, Any]]) 
         description = next((str(d.get("value")) for d in descriptions
                             if d.get("lang") == "en" and d.get("value")), "No English description in feed.")
         score, cvss_version, vector, supplied_severity = _score(cve)
-        severity = severity_from_cvss(score, supplied_severity)
+        severity = severity_from_cvss(score, supplied_severity, cvss_version)
         references = tuple(
             str(ref.get("url")) for ref in cve.get("references", [])
             if isinstance(ref, dict) and ref.get("url")
