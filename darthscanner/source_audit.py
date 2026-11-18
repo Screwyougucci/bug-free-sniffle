@@ -116,9 +116,12 @@ def _scan_python_file(path: Path) -> list[Finding]:
             ))
 
         if called in {"yaml.load", "yaml.unsafe_load"}:
-            safe_loader = any(
-                keyword.arg in {"Loader"} and _name(keyword.value).endswith(("SafeLoader", "CSafeLoader"))
-                for keyword in node.keywords if keyword.arg
+            safe_loader = (
+                any(
+                    keyword.arg == "Loader" and _name(keyword.value).endswith(("SafeLoader", "CSafeLoader"))
+                    for keyword in node.keywords if keyword.arg
+                )
+                or (len(node.args) >= 2 and _name(node.args[1]).endswith(("SafeLoader", "CSafeLoader")))
             )
             if not safe_loader:
                 add(_finding(
@@ -181,6 +184,21 @@ def _scan_python_file(path: Path) -> list[Finding]:
                 "Improper path validation may allow reading or writing files outside the intended directory.",
                 30,
             ))
+
+        if called.endswith(".execute") and node.args:
+            sql_expression = node.args[0]
+            if isinstance(sql_expression, ast.JoinedStr) or (
+                isinstance(sql_expression, ast.BinOp) and isinstance(sql_expression.op, ast.Add)
+            ):
+                add(_finding(
+                    path, line, "source-analysis", "SQL query may be assembled through string formatting",
+                    "high", "medium", "Database execute() receives an f-string or string-concatenation expression.",
+                    "Use parameterized SQL placeholders and pass values separately. Do not interpolate user-controlled values into SQL text.",
+                    "CWE-89",
+                    "Constructing SQL with dynamic string formatting can allow input to change query structure.",
+                    "If untrusted input reaches the formatted fragment, database queries may be altered.",
+                    55,
+                ))
 
         if called in {"hashlib.md5", "hashlib.sha1", "md5", "sha1"}:
             add(_finding(
