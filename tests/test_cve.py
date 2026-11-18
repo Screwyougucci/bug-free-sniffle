@@ -49,6 +49,8 @@ class CveMatchingTests(unittest.TestCase):
         self.assertEqual(severity_from_cvss(8.1), "high")
         self.assertEqual(severity_from_cvss(6.5), "medium")
         self.assertEqual(severity_from_cvss(3.9), "low")
+        self.assertEqual(severity_from_cvss(10.0, version="2.0"), "high")
+        self.assertEqual(severity_from_cvss(9.0, version="3.1"), "critical")
         self.assertEqual(severity_from_cvss(None), "info")
 
     def test_nvd_cpe_range_generates_detailed_candidate(self):
