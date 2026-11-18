@@ -23,4 +23,6 @@ jobs:
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
       - name: Check installed CLI
-        run: darth-scanner --help
+        run: |
+          darth-scanner --help
+          darth-scanner audit-code --help
