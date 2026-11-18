@@ -4,10 +4,9 @@ from __future__ import annotations
 import argparse
 from collections import Counter
 import sys
-from urllib.parse import urlsplit
 
 from . import __version__
-from .checks import inspect_http
+from .checks import inspect_html, inspect_http
 from .crawler import crawl
 from .fuzzer import observations_to_dict, run_fuzz
 from .http_client import SafeHttpClient
@@ -52,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
             findings = []
             for response in responses:
                 findings.extend(inspect_http(response))
+                findings.extend(inspect_html(response))
             findings.extend(inspect_tls(args.target, scope))
             pages = [
                 {"url": r.url, "status": r.status, "response_bytes": len(r.body),
