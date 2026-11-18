@@ -14,3 +14,6 @@ darth-cve-report.html
 darth-cve-findings.csv
 .pytest_cache/
 .coverage
+darth-source-report.json
+darth-source-report.html
+darth-source-findings.csv
