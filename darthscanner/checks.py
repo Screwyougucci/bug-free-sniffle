@@ -24,6 +24,7 @@ class Finding:
     cvss_version: str | None = None
     cvss_vector: str | None = None
     cve_ids: list[str] = field(default_factory=list)
+    cwe_ids: list[str] = field(default_factory=list)
     references: list[str] = field(default_factory=list)
     affected_component: str | None = None
     remediation_steps: list[str] = field(default_factory=list)
@@ -62,6 +63,31 @@ def _finding(category: str, title: str, severity: str, confidence: str,
         "low": "Usually represents defense-in-depth weakness or limited information exposure.",
         "info": "Informational observation; no direct security impact has been established.",
     }
+    cwe_ids = []
+    if "Password form uses GET" in title:
+        cwe_ids = ["CWE-598"]
+    elif "Password form is not guaranteed to submit over HTTPS" in title or "insecure HTTP resource" in title:
+        cwe_ids = ["CWE-319"]
+    elif "Directory index" in title:
+        cwe_ids = ["CWE-548"]
+    elif "Database error detail" in title:
+        cwe_ids = ["CWE-209"]
+    elif "debug" in category:
+        cwe_ids = ["CWE-497"]
+    elif "Target-blank link lacks opener isolation" in title:
+        cwe_ids = ["CWE-1022"]
+    elif "Clickjacking protection" in title:
+        cwe_ids = ["CWE-1021"]
+    elif category == "csp":
+        cwe_ids = ["CWE-693"]
+    elif category == "cookies":
+        if "HttpOnly" in evidence:
+            cwe_ids.append("CWE-1004")
+        if "Secure" in evidence or "SameSite=None" in evidence or "__Host-" in title or "__Secure-" in title:
+            cwe_ids.append("CWE-614")
+
+    references = [f"https://cwe.mitre.org/data/definitions/{item.split('-')[1]}.html"
+                  for item in cwe_ids]
     return Finding(
         category=category,
         title=title,
@@ -74,6 +100,8 @@ def _finding(category: str, title: str, severity: str, confidence: str,
         description=descriptions.get(category, "A security-relevant condition was observed."),
         impact=impacts.get(severity, impacts["info"]),
         remediation_steps=[remediation] if remediation else [],
+        cwe_ids=cwe_ids,
+        references=references,
     )
 
 
