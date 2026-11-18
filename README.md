@@ -4,7 +4,7 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.5.0 capabilities
+## Version 0.6.0 capabilities
 
 ### 1. Website security checks
 
@@ -101,13 +101,7 @@ Every finding can include:
 - CVE identifier(s), CVSS version, score, and vector where applicable.
 - Remediation summary and practical remediation steps.
 
-Each scan automatically writes three files:
-
-- `darth-report.json` — full machine-readable report and coverage totals.
-- `darth-report.html` — self-contained dashboard with search, severity, CWE, and minimum-CVSS filters.
-- `darth-findings.csv` — one row per deduplicated finding.
-
-The dashboard works locally in a browser and does not upload scan results anywhere. CSV and HTML contain finding metadata, not fetched file contents.
+Each scan writes a single UTF-8 `darth-report.json` file designed to open cleanly in Notepad. It contains findings, evidence, coverage totals, scanned page/resource metadata, and optional CVE matches. The scanner does not generate HTML or CSV reports.
 
 ## Install
 
@@ -197,7 +191,7 @@ darth-scanner audit-code --path . --max-files 1000
 
 This creates `darth-source-report.json`. The audit skips virtual environments, dependency folders, build outputs, and files larger than 2 MB. It never executes source files and redacts credential-like literal values.
 
-Treat results as code-review leads. Confirm reachability, input control, authentication boundaries, and impact before reporting a vulnerability. A true zero-day requires validation and responsible disclosure; the scanner cannot promise to discover one.
+Treat results as code-review leads. Confirm reachability, input control, authentication boundaries, and impact before reporting a vulnerability. A true zero-day requires a previously unknown flaw, reproducible evidence, impact validation, and responsible disclosure. No scanner can promise to discover one or guarantee a number of findings.
 
 ## Finding quality
 
