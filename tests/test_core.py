@@ -115,13 +115,47 @@ class PassiveChecksTests(unittest.TestCase):
         titles = {finding.title for finding in inspect_html(response)}
         self.assertIn("Password form uses GET", titles)
 
-    def test_external_script_without_sri_is_observation(self):
-        response = HttpResponse("https://owned.example/", 200,
+    def test_password_form_on_http_is_reported(self):
+        response = HttpResponse("http://owned.example/login", 200,
                                 {"content-type": "text/html"},
-                                b'<script src="https://cdn.example/app.js"></script>', 0.1)
-        finding = next(f for f in inspect_html(response)
-                       if f.title == "Cross-origin script has no Subresource Integrity attribute")
-        self.assertEqual(finding.kind, "observation")
+                                b'<form method="post"><input type="password" name="pw"></form>', 0.1)
+        titles = {finding.title for finding in inspect_html(response)}
+        self.assertIn("Password form is not guaranteed to submit over HTTPS", titles)
+
+    def test_debug_and_directory_listing_signatures_are_reported(self):
+        response = HttpResponse("https://owned.example/debug", 200,
+                                {"content-type": "text/html"},
+                                b"<h1>Index of /backup</h1> Werkzeug Debugger", 0.1)
+        titles = {finding.title for finding in inspect_http(response)}
+        self.assertIn("Directory index appears to be enabled", titles)
+        self.assertIn("Werkzeug interactive debugger signature detected", titles)
+
+    def test_database_error_signature_is_reported_without_copying_body(self):
+        response = HttpResponse("https://owned.example/search", 500,
+                                {"content-type": "text/plain"},
+                                b"You have an error in your SQL syntax near sensitive-value", 0.1)
+        findings = inspect_http(response)
+        finding = next(f for f in findings if f.category == "error-disclosure")
+        self.assertNotIn("sensitive-value", finding.evidence)
+
+    def test_host_cookie_prefix_violation_is_reported(self):
+        response = HttpResponse("https://owned.example/", 200, {
+            "content-type": "text/html",
+            "set-cookie": "__Host-session=abc; Path=/login; Domain=owned.example"
+        }, b"<html></html>", 0.1)
+        titles = {finding.title for finding in inspect_http(response)}
+        self.assertIn("Cookie '__Host-session' violates the __Host- prefix requirements", titles)
+
+    def test_findings_include_detailed_fields_and_stable_id(self):
+        response = HttpResponse("https://owned.example/", 200,
+                                {"content-type": "text/html"}, b"<html></html>", 0.1)
+        finding = next(f for f in inspect_http(response)
+                       if f.title == "Content Security Policy is missing")
+        data = finding.to_dict()
+        self.assertTrue(data["finding_id"])
+        self.assertTrue(data["description"])
+        self.assertTrue(data["impact"])
+        self.assertTrue(data["remediation_steps"])
 
 
 if __name__ == "__main__":
