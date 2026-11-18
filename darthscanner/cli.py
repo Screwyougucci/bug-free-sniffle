@@ -216,7 +216,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.max_cases < 1 or args.max_cases > 32:
             raise ValueError("--max-cases must be between 1 and 32.")
         scope.validate_url(args.url)
-        client = SafeHttpClient(scope, max_requests=min(scope.max_requests, args.max_cases + 1))
+        client = SafeHttpClient(scope, max_requests=min(scope.max_requests, args.max_cases + (8 if args.param == "*" else 1)))
         observations = run_fuzz_many(args.url, ["*"] if args.param == "*" else [args.param], scope, client, args.max_cases)
         _write_bundle(
             args, target=args.url, requests_made=client.requests_made, pages=[],
