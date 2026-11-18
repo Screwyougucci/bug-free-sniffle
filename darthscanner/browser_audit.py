@@ -128,6 +128,48 @@ def inspect_browser_code(response) -> list[Finding]:
                 confidence_score=30,
             ))
 
+    combined_script = "\\n".join(parser.inline_scripts)
+    if re.search(r"\\.postMessage\\s*\\([\\s\\S]{0,300}?,\\s*['\\\"]\\*['\\\"]\\s*\\)", combined_script):
+        findings.append(Finding(
+            category="browser-messaging",
+            title="postMessage appears to use a wildcard target origin",
+            severity="medium",
+            confidence="medium",
+            url=response.url,
+            kind="static-review-candidate",
+            description="Inline JavaScript appears to send a message using '*' as the target origin.",
+            impact="Sensitive message data may be delivered to an unintended browsing context if the target window can be navigated or controlled.",
+            evidence="A postMessage call with wildcard target origin was detected; message contents were not retained.",
+            remediation="Use an exact trusted target origin and validate event.origin on message receivers.",
+            cwe_ids=["CWE-345"],
+            references=["https://cwe.mitre.org/data/definitions/345.html"],
+            confidence_score=55,
+        ))
+
+    if re.search(r"\\b(?:localStorage|sessionStorage)\\.setItem\\s*\\(\\s*['\\\"][^'\\\"]*(?:token|auth|session|jwt|secret)[^'\\\"]*['\\\"]", combined_script, re.I):
+        findings.append(Finding(
+            category="browser-storage",
+            title="Authentication-like value may be stored in web storage",
+            severity="low",
+            confidence="low",
+            url=response.url,
+            kind="static-review-candidate",
+            description="Inline JavaScript appears to write a value under a token- or session-like web-storage key.",
+            impact="Web storage is readable by JavaScript in the origin; an XSS flaw could expose stored credentials or tokens.",
+            evidence="A localStorage/sessionStorage key name resembles an authentication or secret value; key and value are omitted.",
+            remediation="Avoid storing long-lived bearer credentials in JavaScript-readable storage; prefer appropriately configured HttpOnly cookies where suitable.",
+            cwe_ids=["CWE-922"],
+            references=["https://cwe.mitre.org/data/definitions/922.html"],
+            confidence_score=25,
+        ))
+
+    for block in parser.inline_scripts:
+        for match in re.findall(r"sourceMappingURL\\s*=\\s*([^\\s*]+)", block):
+            if match.startswith(("http://", "https://", "/", "./")):
+                resolved = urlsplit(urljoin(response.url, match))
+                if resolved.netloc.lower() == urlsplit(response.url).netloc.lower():
+                    parser.source_maps.append(match)
+
     for src in parser.source_maps[:20]:
         resolved = urlsplit(urljoin(response.url, src))
         if resolved.netloc.lower() == urlsplit(response.url).netloc.lower():
