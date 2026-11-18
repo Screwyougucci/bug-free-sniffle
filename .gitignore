@@ -4,6 +4,13 @@ __pycache__/
 venv/
 scope.json
 darth-report.json
+darth-report.html
+darth-findings.csv
 darth-fuzz-report.json
+darth-fuzz-report.html
+darth-fuzz-findings.csv
+darth-cve-report.json
+darth-cve-report.html
+darth-cve-findings.csv
 .pytest_cache/
 .coverage
