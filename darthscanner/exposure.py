@@ -43,7 +43,8 @@ _PROBES = [
 ]
 
 
-def probe_sensitive_paths(target: str, scope: Scope, client: SafeHttpClient) -> list[Finding]:
+def probe_sensitive_paths(target: str, scope: Scope, client: SafeHttpClient,
+                          max_paths: int = 18) -> list[Finding]:
     """Check likely sensitive paths with bounded HEAD requests and no body reads."""
     scope.validate_url(target)
     parts = urlsplit(target)
@@ -51,7 +52,7 @@ def probe_sensitive_paths(target: str, scope: Scope, client: SafeHttpClient) -> 
     findings: list[Finding] = []
     remaining = max(0, client.max_requests - client.requests_made)
 
-    for path, label, severity in _PROBES[:remaining]:
+    for path, label, severity in _PROBES[:min(remaining, max(0, max_paths))]:
         response = client.head(base.rstrip("/") + path)
         if response.status is None or not 200 <= response.status < 300:
             continue
