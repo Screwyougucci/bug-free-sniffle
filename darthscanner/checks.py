@@ -132,6 +132,32 @@ def inspect_http(response) -> list[Finding]:
     headers = response.headers
     is_html = "text/html" in headers.get("content-type", "").lower()
 
+    source_parts = urlsplit(response.url)
+    location = headers.get("location")
+    if 300 <= response.status < 400 and location:
+        destination = urlsplit(urljoin(response.url, location))
+        if source_parts.scheme.lower() == "https" and destination.scheme.lower() == "http":
+            findings.append(_finding(
+                "redirect", "HTTPS response redirects to an unencrypted HTTP URL", "medium", "high", response,
+                f"Location resolves to http://{destination.netloc}{destination.path[:120]}. Redirects were not followed.",
+                "Keep redirect destinations on HTTPS and reject downgrade destinations unless explicitly required.",
+            ))
+        if destination.netloc and source_parts.netloc and destination.netloc.lower() != source_parts.netloc.lower():
+            findings.append(_finding(
+                "redirect", "Cross-origin redirect observed", "info", "high", response,
+                f"Location resolves to {destination.scheme}://{destination.netloc}{destination.path[:120]}. Redirects were not followed; this alone does not prove an open redirect.",
+                "Confirm this external destination is intentional and that user-controlled redirect parameters use a strict destination allowlist.",
+                kind="observation",
+            ))
+
+    auth_challenge = headers.get("www-authenticate", "")
+    if source_parts.scheme.lower() == "http" and "basic" in auth_challenge.lower():
+        findings.append(_finding(
+            "authentication", "HTTP endpoint advertises Basic authentication without TLS", "high", "high", response,
+            f"WWW-Authenticate begins with {auth_challenge[:120]!r}; source URL uses HTTP.",
+            "Require HTTPS before HTTP Basic authentication and redirect or reject plaintext requests.",
+        ))
+
     if is_html:
         checks = [
             ("content-security-policy", "Content Security Policy is missing", "medium",
@@ -150,6 +176,12 @@ def inspect_http(response) -> list[Finding]:
                     f"Response status {response.status}; header {name!r} was not present.",
                     remediation,
                 ))
+        if "x-content-type-options" in headers and headers["x-content-type-options"].strip().lower() != "nosniff":
+            findings.append(_finding(
+                "http-headers", "X-Content-Type-Options has an ineffective value", "low", "high", response,
+                f"Observed value: {headers['x-content-type-options'][:100]!r}.",
+                "Set the header value to exactly nosniff.",
+            ))
 
     if response.url.lower().startswith("https://"):
         hsts = headers.get("strict-transport-security")
@@ -238,6 +270,13 @@ def inspect_http(response) -> list[Finding]:
             "http-headers", "Clickjacking protection was not detected", "low", "high", response,
             "Neither X-Frame-Options nor CSP frame-ancestors was observed.",
             "Set an appropriate Content-Security-Policy frame-ancestors directive; use X-Frame-Options for legacy clients.",
+        ))
+    xfo = headers.get("x-frame-options", "").strip().lower()
+    if is_html and xfo and xfo not in {"deny", "sameorigin"}:
+        findings.append(_finding(
+            "http-headers", "X-Frame-Options contains an unsupported or unsafe value", "low", "high", response,
+            f"Observed X-Frame-Options: {headers.get('x-frame-options', '')[:100]!r}.",
+            "Use DENY or SAMEORIGIN, or configure CSP frame-ancestors as the primary control.",
         ))
 
     referrer_policy = headers.get("referrer-policy", "").lower()
