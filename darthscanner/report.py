@@ -17,7 +17,9 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
                  findings: list, fuzz_observations: list[dict] | None = None,
                  software_components: list[dict] | None = None,
                  exposure_paths_checked: int = 0,
-                 tls_probes: int = 0) -> dict:
+                 tls_probes: int = 0,
+                 source_files_reviewed: int = 0,
+                 source_files_skipped: int = 0) -> dict:
     """Normalize, deduplicate, sort, and summarize scan results."""
     unique = {}
     for item in findings:
@@ -59,6 +61,8 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
             "software_components_identified": len(software_components or []),
             "exposure_paths_checked": exposure_paths_checked,
             "tls_probes": tls_probes,
+            "source_files_reviewed": source_files_reviewed,
+            "source_files_skipped": source_files_skipped,
             "findings_total": len(normalized),
             "severity_counts": dict(severity_counts),
             "category_counts": dict(category_counts),
