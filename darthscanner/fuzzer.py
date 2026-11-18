@@ -22,13 +22,24 @@ def _variants() -> list[tuple[str, str]]:
     return [
         ("empty", ""),
         ("zero", "0"),
+        ("positive-one", "1"),
         ("negative-one", "-1"),
+        ("int32-maximum", "2147483647"),
+        ("int32-minimum", "-2147483648"),
+        ("decimal", "1.5"),
+        ("boolean-true", "true"),
+        ("boolean-false", "false"),
+        ("null-like", "null"),
         ("short-boundary", "A" * 32),
-        ("bounded-long", "A" * 128),
+        ("medium-boundary", "A" * 128),
+        ("bounded-long", "A" * 256),
         ("whitespace", " value with spaces "),
+        ("tabs", "\\tvalue\\t"),
         ("unicode", "café-東京-🙂"),
         ("reserved-characters", "a&b=c?d#e"),
         ("percent-literal", "100%25"),
+        ("json-shaped", '{"k":"v"}'),
+        ("array-shaped", "[]"),
     ]
 
 
