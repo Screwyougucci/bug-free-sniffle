@@ -137,6 +137,7 @@ class PassiveChecksTests(unittest.TestCase):
         findings = inspect_http(response)
         finding = next(f for f in findings if f.category == "error-disclosure")
         self.assertNotIn("sensitive-value", finding.evidence)
+        self.assertIn("CWE-209", finding.cwe_ids)
 
     def test_host_cookie_prefix_violation_is_reported(self):
         response = HttpResponse("https://owned.example/", 200, {
@@ -156,6 +157,8 @@ class PassiveChecksTests(unittest.TestCase):
         self.assertTrue(data["description"])
         self.assertTrue(data["impact"])
         self.assertTrue(data["remediation_steps"])
+        self.assertIn("CWE-693", data["cwe_ids"])
+        self.assertTrue(any("cwe.mitre.org" in url for url in data["references"]))
 
 
 if __name__ == "__main__":
