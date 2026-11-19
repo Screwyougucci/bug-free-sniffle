@@ -154,18 +154,21 @@ def inspect_javascript_source(source_url: str, source: str) -> list[Finding]:
     events.extend((m.start(), "sink", m) for m in sink_re.finditer(text))
     events.sort(key=lambda item: item[0])
     tainted: set[str] = set()
+    sanitized: set[str] = set()
     reported: set[tuple[str, str]] = set()
     for _, event_type, match in events:
         if event_type == "assignment":
             variable, expression = match.group(1), match.group(2).strip()
             tainted.discard(variable)
+            sanitized.discard(variable)
             if sanitizer_expr.search(expression):
+                sanitized.add(variable)
                 continue
             if source_expr.search(expression) or re.fullmatch(r"[A-Za-z_$][\w$]*", expression) and expression in tainted:
                 tainted.add(variable)
             continue
         sink_variable = next((match.group(name) for name in ("inner", "outer", "insert", "write", "eval", "function") if match.group(name)), None)
-        if sink_variable and sink_variable in tainted:
+        if sink_variable and sink_variable in tainted and sink_variable not in sanitized:
             sink_name = match.group("sink").split("=", 1)[0].strip()
             key = (sink_variable, sink_name)
             if key in reported:
