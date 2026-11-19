@@ -12,7 +12,8 @@ from .checks import inspect_html, inspect_http
 from .browser_audit import inspect_browser_code
 from .js_research import extract_same_origin_script_urls, inspect_javascript_source
 from .crawler import crawl
-from .discovery import discover_query_targets\nfrom .api_discovery import discover_static_get_targets
+from .discovery import discover_query_targets
+from .api_discovery import discover_static_get_targets
 from .cve import load_inventory, load_nvd_feed, match_cves
 from .exposure import probe_sensitive_paths
 from .fingerprint import fingerprint_response
