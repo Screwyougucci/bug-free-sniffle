@@ -439,3 +439,10 @@ The normal passive HTTP review now adds two small but useful checks without maki
 - **CORS cache variation:** flags a concrete `Access-Control-Allow-Origin` response that omits `Vary: Origin`. This matters when the server dynamically selects an allowed origin; a static single-origin policy may not require it.
 
 The checks intentionally do not flag public caching on ordinary public routes, and they accept `Vary: Origin` case-insensitively. They analyze headers from responses already fetched within the existing scope and request budget. They do not probe other origins, attempt cache poisoning, or retrieve another user's data.
+
+
+## Version 1.9.0 — deeper JavaScript source-to-sink review
+
+The same-origin JavaScript review now follows simple local variable assignments and aliases in source order. It recognizes additional browser-controlled inputs, including message event data and values read through `URLSearchParams` or `URL.searchParams`, then checks whether those values reach selected HTML-string DOM or dynamic-code sinks.
+
+A visible reassignment through a small set of recognized sanitizer functions breaks the simple taint chain. This is deliberately conservative and is **not** a full JavaScript parser or taint engine: it does not understand function calls, branches, object properties, inter-module flows, framework abstractions, or every sanitizer. Findings remain low-confidence review candidates; verify the exact code path and sanitizer behavior manually. No JavaScript is executed and no payloads are sent.
