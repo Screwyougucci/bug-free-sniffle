@@ -25,6 +25,13 @@ notepad .\\darth-research-report.json
 
 This mode only tests query URLs found in same-origin links and pages. It does not infer hidden routes or submit HTML forms. A GET endpoint can still be state-changing if an application is incorrectly designed; only run this against systems where this bounded testing is authorized.
 
+To replay one exact benign mutation recorded in the JSON report, use its `endpoint_url`, `parameter`, and `case` fields:
+```powershell
+darth-scanner replay --url "https://your-authorized-host.example/search?q=hello" --param "q" --case "empty" --scope ".\\scope.json" --acknowledge-authorization --output ".\\darth-replay-report.json"
+notepad .\\darth-replay-report.json
+```
+Replay accepts only named values from the built-in benign corpus and sends exactly one GET request.
+
 ### 2. Website security checks
 
 - Bounded same-origin HTML crawling. Forms are never submitted and JavaScript is never executed.
