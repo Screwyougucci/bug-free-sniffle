@@ -126,28 +126,28 @@ def inspect_javascript_source(source_url: str, source: str) -> list[Finding]:
     # simple local assignments and aliases in source order, and intentionally
     # reports only direct identifier use at known sinks.
     source_expr = re.compile(
-        r"(?:\\b(?:window\\.)?location\\.(?:hash|search|href)\\b|"
-        r"\\bdocument\\.(?:URL|referrer)\\b|\\bwindow\\.name\\b|"
-        r"\\b(?:event|e|evt|messageEvent)\\.data\\b|"
-        r"\\bnew\\s+URLSearchParams\\s*\\([^)]*\\)\\s*\\.\\s*get\\s*\\(|"
-        r"\\bnew\\s+URL\\s*\\([^)]*\\)\\s*\\.\\s*searchParams\\s*\\.\\s*get\\s*\\()",
+        r"(?:\b(?:window\.)?location\.(?:hash|search|href)\b|"
+        r"\bdocument\.(?:URL|referrer)\b|\bwindow\.name\b|"
+        r"\b(?:event|e|evt|messageEvent)\.data\b|"
+        r"\bnew\s+URLSearchParams\s*\([^)]*\)\s*\.\s*get\s*\(|"
+        r"\bnew\s+URL\s*\([^)]*\)\s*\.\s*searchParams\s*\.\s*get\s*\()",
         re.I,
     )
     sanitizer_expr = re.compile(
-        r"\\b(?:DOMPurify\\.sanitize|sanitizeHTML|sanitizeHtml|escapeHTML|"
-        r"encodeForHTML|textContentSafe)\\s*\\(",
+        r"\b(?:DOMPurify\.sanitize|sanitizeHTML|sanitizeHtml|escapeHTML|"
+        r"encodeForHTML|textContentSafe)\s*\(",
         re.I,
     )
     assignment_re = re.compile(
-        r"(?m)(?:(?:const|let|var)\\s+)?([A-Za-z_$][\\w$]*)\\s*=\\s*([^;\\n]+)"
+        r"(?m)(?:(?:const|let|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*([^;\n]+)"
     )
     sink_re = re.compile(
-        r"(?P<sink>\\.innerHTML\\s*=\\s*(?P<inner>[A-Za-z_$][\\w$]*)\\b|"
-        r"\\.outerHTML\\s*=\\s*(?P<outer>[A-Za-z_$][\\w$]*)\\b|"
-        r"\\.insertAdjacentHTML\\s*\\([^,]+,\\s*(?P<insert>[A-Za-z_$][\\w$]*)\\b|"
-        r"\\bdocument\\.write(?:ln)?\\s*\\(\\s*(?P<write>[A-Za-z_$][\\w$]*)\\b|"
-        r"\\beval\\s*\\(\\s*(?P<eval>[A-Za-z_$][\\w$]*)\\b|"
-        r"\\bnew\\s+Function\\s*\\(\\s*(?P<function>[A-Za-z_$][\\w$]*)\\b)",
+        r"(?P<sink>\.innerHTML\s*=\s*(?P<inner>[A-Za-z_$][\w$]*)\b|"
+        r"\.outerHTML\s*=\s*(?P<outer>[A-Za-z_$][\w$]*)\b|"
+        r"\.insertAdjacentHTML\s*\([^,]+,\s*(?P<insert>[A-Za-z_$][\w$]*)\b|"
+        r"\bdocument\.write(?:ln)?\s*\(\s*(?P<write>[A-Za-z_$][\w$]*)\b|"
+        r"\beval\s*\(\s*(?P<eval>[A-Za-z_$][\w$]*)\b|"
+        r"\bnew\s+Function\s*\(\s*(?P<function>[A-Za-z_$][\w$]*)\b)",
         re.I,
     )
     events = [(m.start(), "assignment", m) for m in assignment_re.finditer(text)]
@@ -161,7 +161,7 @@ def inspect_javascript_source(source_url: str, source: str) -> list[Finding]:
             tainted.discard(variable)
             if sanitizer_expr.search(expression):
                 continue
-            if source_expr.search(expression) or re.fullmatch(r"[A-Za-z_$][\\w$]*", expression) and expression in tainted:
+            if source_expr.search(expression) or re.fullmatch(r"[A-Za-z_$][\w$]*", expression) and expression in tainted:
                 tainted.add(variable)
             continue
         sink_variable = next((value for value in match.groupdict().values() if value), None)
