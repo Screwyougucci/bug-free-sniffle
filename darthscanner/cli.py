@@ -295,7 +295,9 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "scan":
             scope.validate_url(args.target)
             client = SafeHttpClient(scope)
-            responses = crawl(args.target, scope, client)
+            # Reserve room for metadata discovery and the existing exposure/method checks.
+            scan_scope = replace(scope, max_pages=min(scope.max_pages, max(1, scope.max_requests - 27)))
+            responses = crawl(args.target, scan_scope, client)
             api_budget = min(7, max(0, client.max_requests - client.requests_made - 20))
             api_inventory = (discover_api_resources(args.target, scope, client, max_resources=api_budget)
                              if api_budget else {"resources": [], "api_endpoints": [],
