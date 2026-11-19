@@ -13,6 +13,7 @@ from .browser_audit import inspect_browser_code
 from .js_research import extract_same_origin_script_urls, inspect_javascript_source
 from .crawler import crawl
 from .discovery import discover_query_targets
+from .evidence import build_reproduction_evidence
 from .cve import load_inventory, load_nvd_feed, match_cves
 from .exposure import probe_sensitive_paths
 from .fingerprint import fingerprint_response
@@ -218,11 +219,23 @@ def main(argv: list[str] | None = None) -> int:
                  "error": response.error, "resource_type": "html-or-linked-resource"}
                 for response in responses
             ]
-            _write_bundle(
+            fuzz_data = observations_to_dict(observations)
+            report = _write_bundle(
                 args, target=args.target, requests_made=client.requests_made,
                 pages=pages, findings=[],
-                fuzz_observations=observations_to_dict(observations),
+                fuzz_observations=fuzz_data,
             )
+            # Preserve the ordinary scanner report while adding auditable reproduction
+            # recipes and explicit limits on source-location attribution.
+            report["reproduction_evidence"] = build_reproduction_evidence(fuzz_data)
+            report["authorization_scope"] = {
+                "allowed_hosts": list(scope.allowed_hosts),
+                "host_matching": "exact hostname; subdomains require explicit entries",
+                "authorized": scope.authorized,
+            }
+            import json
+            from pathlib import Path
+            Path(args.output).write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
             anomaly_count = sum(item.anomaly_score >= 20 for item in observations)
             print(f"Discovered {len(targets)} same-origin query URL(s) across {len(responses)} crawled page(s).")
             print(f"Coverage-guided tests: {mutations} benign mutations across {len({item.endpoint_url for item in observations})} endpoint(s) and {len({(item.endpoint_url, item.parameter) for item in observations})} parameter(s).")
