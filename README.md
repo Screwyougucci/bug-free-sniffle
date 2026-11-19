@@ -461,3 +461,10 @@ The local `audit-code` command now performs a bounded AST-based data-flow pass f
 
 Unlike the earlier checks that flagged any dynamic URL or path expression, these new findings require a recognizable request-input source and a simple local assignment path to a sink. Constant SQL and constant URLs are not flagged by this data-flow pass. The analysis is intentionally conservative and does not model all function calls, branches, interprocedural flows, framework wrappers, validation, or sanitizer semantics. Findings remain low-confidence review candidates, not proof of exploitable vulnerabilities. No source code is executed and no network requests are made.
 
+
+
+## Version 2.1.0 — Multi-language request-to-sink research
+
+The local `audit-code` command now adds bounded source-to-sink review for JavaScript, TypeScript, PHP, Java, and Go, alongside the Python AST pass. It recognizes common web-request input patterns, follows simple same-file local assignments, and looks for nearby database query, outbound request, filesystem, process, dynamic-template, and deserialization operations.
+
+This additional pass is line-oriented and heuristic. It does not fully parse these languages, understand lexical scopes or control flow, follow function boundaries, or prove that validation and sanitization are absent. It can miss flows split across lines and can produce false positives when identifiers are reused. Findings are low-confidence review candidates, not validated vulnerabilities. The scanner does not execute source code or send network requests during source review.
