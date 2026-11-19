@@ -164,7 +164,7 @@ def inspect_javascript_source(source_url: str, source: str) -> list[Finding]:
             if source_expr.search(expression) or re.fullmatch(r"[A-Za-z_$][\w$]*", expression) and expression in tainted:
                 tainted.add(variable)
             continue
-        sink_variable = next((value for value in match.groupdict().values() if value), None)
+        sink_variable = next((match.group(name) for name in ("inner", "outer", "insert", "write", "eval", "function") if match.group(name)), None)
         if sink_variable and sink_variable in tainted:
             sink_name = match.group("sink").split("=", 1)[0].strip()
             key = (sink_variable, sink_name)
