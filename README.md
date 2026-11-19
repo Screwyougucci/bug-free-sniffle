@@ -282,3 +282,16 @@ The score is a triage priority, **not** a probability of vulnerability. Normaliz
 ### 12. JavaScript source-to-sink review
 
 Same-origin JavaScript review now adds a lightweight assignment-to-sink heuristic: it can follow a directly assigned browser-controlled variable (for example, a URL fragment or query string) into nearby HTML-string DOM or dynamic-code sinks. It recognizes a few common sanitizer assignments but is not a full JavaScript parser or taint engine. It can miss aliases, cross-function flows, framework abstractions, and sanitizers; findings remain low-confidence review leads.
+
+
+### Static JavaScript API route discovery (v1.1 research)
+
+The `research` command can now inspect a small, bounded set of same-origin JavaScript
+files already linked from crawled pages. It does **not** execute scripts. It extracts
+only literal URL arguments from unambiguous `fetch(url)` (single-argument GET),
+`axios.get(url)`, and `XMLHttpRequest.open("GET", url)` patterns. Only same-origin
+URLs with existing, non-sensitive query parameters are eligible for the existing
+benign GET fuzzer. Dynamic URL construction, POST/PUT/PATCH/DELETE calls, external
+hosts, and credential-like parameter names are ignored. Script fetches consume the
+same scope request budget and leave a small reserve for fuzzing. This is static
+pattern matching: it can miss routes and can produce candidates that need review.
