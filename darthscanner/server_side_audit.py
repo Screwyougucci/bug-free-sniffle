@@ -12,32 +12,32 @@ from .checks import Finding
 
 _RULES = (
     ("database-error", "Database error details exposed", "medium", "CWE-209",
-     re.compile(r"(?:SQLSTATE\\[[0-9A-Z]+\\]|you have an error in your sql syntax|\\b(?:sqlite|postgresql|mysql|mariadb|odbc)\\b.{0,60}\\b(?:syntax error|exception|error)\\b|\\b(?:psycopg2|PDOException|mysqli_sql_exception)\\b)", re.I),
+     re.compile(r"(?:SQLSTATE\[[0-9A-Z]+\]|you have an error in your sql syntax|\b(?:sqlite|postgresql|mysql|mariadb|odbc)\b.{0,60}\b(?:syntax error|exception|error)\b|\b(?:psycopg2|PDOException|mysqli_sql_exception)\b)", re.I),
      "Database diagnostics can disclose schema, query, driver, or implementation details.",
      "Return generic client errors; keep database diagnostics in access-controlled server logs."),
     ("stack-trace", "Server-side stack trace exposed", "medium", "CWE-209",
-     re.compile(r"(?:Traceback \\(most recent call last\\)|\\b(?:NullPointerException|ClassNotFoundException|\\w+Exception)\\b.{0,160}\\bat\\s+[\\w.$]+\\([^)]*:\\d+\\)|\\bat\\s+/[^\\s:]+\\.(?:php|py|rb|java|js):\\d+)", re.I),
+     re.compile(r"(?:Traceback \(most recent call last\)|\b(?:NullPointerException|ClassNotFoundException|\w+Exception)\b.{0,160}\bat\s+[\w.$]+\([^)]*:\d+\)|\bat\s+/[^\s:]+\.(?:php|py|rb|java|js):\d+)", re.I),
      "Stack traces can disclose internal paths, component names, and execution details.",
      "Disable detailed error pages in production and log diagnostics privately."),
     ("template-error", "Server-side template diagnostic exposed", "low", "CWE-209",
-     re.compile(r"(?:TemplateSyntaxError|TemplateNotFound|UndefinedError:|\\bTwig\\\\Error\\\\|\\bJinja2?\\b.{0,80}(?:template|undefined)|\\bFreeMarker template error\\b|\\bThymeleaf\\b.{0,80}exception)", re.I),
+     re.compile(r"(?:TemplateSyntaxError|TemplateNotFound|UndefinedError:|\bTwig\\Error\\|\bJinja2?\b.{0,80}(?:template|undefined)|\bFreeMarker template error\b|\bThymeleaf\b.{0,80}exception)", re.I),
      "Template diagnostics may reveal template names, engine details, or unsafe rendering paths.",
      "Return generic rendering errors and keep template diagnostics in protected logs."),
     ("local-path", "Internal filesystem path disclosed", "low", "CWE-200",
-     re.compile(r'(?:File "/(?:var|srv|opt|home|app|usr/local)/[^"\\n]{1,180}"|\\b[A-Z]:\\\\(?:inetpub|wwwroot|app|users)\\\\[^\\r\\n]{1,180})', re.I),
+     re.compile(r'(?:File "/(?:var|srv|opt|home|app|usr/local)/[^"\n]{1,180}"|\b[A-Z]:\\(?:inetpub|wwwroot|app|users)\\[^\r\n]{1,180})', re.I),
      "An absolute server path reveals deployment layout and may aid follow-on attacks.",
      "Avoid returning absolute paths in client-visible errors."),
     ("debug-page", "Development or debug error page exposed", "medium", "CWE-489",
-     re.compile(r"(?:Werkzeug Debugger|The install worked successfully!.*Django|You're seeing this error because you have DEBUG = True|Whoops! There was an error|Symfony Exception\\s*\\[|Whitelabel Error Page|Detailed Error Information.*ASP\\.NET)", re.I | re.S),
+     re.compile(r"(?:Werkzeug Debugger|The install worked successfully!.*Django|You're seeing this error because you have DEBUG = True|Whoops! There was an error|Symfony Exception\s*\[|Whitelabel Error Page|Detailed Error Information.*ASP\.NET)", re.I | re.S),
      "A development error page may expose environment details, stack traces, or interactive diagnostics.",
      "Disable development/debug mode in production and restrict diagnostic interfaces to trusted operators."),
     ("runtime-fatal", "Uncaught server runtime error exposed", "low", "CWE-209",
-     re.compile(r"(?:Fatal error:\\s*Uncaught|Uncaught exception ['\\\"]|panic: runtime error:|Unhandled exception\\s*[:\\[])", re.I),
+     re.compile(r"(?:Fatal error:\s*Uncaught|Uncaught exception ['\"]|panic: runtime error:|Unhandled exception\s*[:\[])", re.I),
      "An uncaught runtime error is visible to clients and may disclose implementation details.",
      "Handle exceptions at the application boundary and return generic client responses."),
 )
 
-_VERSIONED_SERVER = re.compile(r"(?i)\\b(?:nginx|apache|microsoft-iis|iis|openresty|caddy|lighttpd|gunicorn|uvicorn|tomcat|jetty|express)\\b[^\\r\\n]{0,80}?\\b\\d+\\.\\d+(?:\\.\\d+)?")
+_VERSIONED_SERVER = re.compile(r"(?i)\b(?:nginx|apache|microsoft-iis|iis|openresty|caddy|lighttpd|gunicorn|uvicorn|tomcat|jetty|express)\b[^\r\n]{0,80}?\b\d+\.\d+(?:\.\d+)?")
 _DEBUG_HEADERS = {
     "x-debug-token": "Debug token header exposed",
     "x-debug-token-link": "Debug toolbar link header exposed",
@@ -88,9 +88,8 @@ def inspect_server_response(response) -> list[Finding]:
                 confidence_score=85,
             ))
 
-    server_value = headers.get("server", "")
-    powered_value = headers.get("x-powered-by", "")
-    for header, value in (("server", server_value), ("x-powered-by", powered_value)):
+    for header, value in (("server", headers.get("server", "")),
+                          ("x-powered-by", headers.get("x-powered-by", ""))):
         if value and _VERSIONED_SERVER.search(value):
             findings.append(_make_finding(
                 response, title="Detailed server software version disclosed",
@@ -109,7 +108,7 @@ def inspect_server_response(response) -> list[Finding]:
         match = pattern.search(body)
         if not match:
             continue
-        snippet = re.sub(r"\\s+", " ", match.group(0))[:180]
+        snippet = re.sub(r"\s+", " ", match.group(0))[:180]
         score = 85 if kind in {"database-error", "stack-trace", "debug-page"} else 70
         findings.append(_make_finding(
             response, title=title, severity=severity, confidence="high" if score >= 80 else "medium",
