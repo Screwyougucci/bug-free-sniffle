@@ -331,3 +331,19 @@ demonstrated. The scanner's generated replay recipe is deliberately limited to
 its named benign test corpus. It does not generate account-takeover, data-theft,
 destructive, persistence, or unauthorized-access payloads. Follow each program's
 scope, rate limits, and disclosure rules.
+
+
+## Version 1.3.0 — passive server-side audit
+
+The research command now adds a server-side diagnostic review of responses already fetched within the configured scope. It looks for:
+- Database error and SQL driver diagnostics that may disclose internal implementation details.
+- Framework and language stack traces.
+- Server-side template-engine diagnostics.
+- Absolute filesystem paths in client-visible error output.
+- Benign input variations that produce HTTP 5xx responses, recorded as low-confidence robustness leads.
+
+These checks do **not** execute SQL, shell commands, template directives, path traversal, SSRF callbacks, or authentication bypasses. They do not submit forms or send state-changing HTTP methods. No additional requests are made by the passive response checks.
+
+A matching database error is evidence of diagnostic disclosure, **not proof of SQL injection**. A 5xx response is an input-handling lead, **not proof of command injection or remote code execution**. SSRF, IDOR, authentication bypass, and authorization-boundary testing require a controlled test environment, test accounts, and explicit permission; they are not claimed as detected by this passive module.
+
+Findings are written into the existing JSON report under `findings`, with category `server-side`, evidence, CWE mapping, confidence, and remediation. Review server logs and reproduce findings in a staging environment before reporting them as vulnerabilities.
