@@ -40,6 +40,15 @@ class JavaScriptResearchTests(unittest.TestCase):
         self.assertTrue(any("source and dangerous" in item.title for item in findings))
         self.assertTrue(all(item.confidence == "low" for item in findings))
 
+    def test_traces_browser_input_variable_to_dom_sink(self):
+        findings = inspect_javascript_source(
+            "https://example.test/app.js",
+            "const queryValue = location.search;\\n"
+            "const safe = DOMPurify.sanitize(other);\\n"
+            "element.innerHTML = queryValue;",
+        )
+        self.assertTrue(any("flows into a risky" in item.title for item in findings))
+
     def test_finds_message_listener_without_obvious_origin_check(self):
         findings = inspect_javascript_source(
             "https://example.test/app.js",
