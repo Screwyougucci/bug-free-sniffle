@@ -11,6 +11,7 @@ import re
 
 from .checks import Finding
 from .source_audit import MAX_FILE_BYTES, SKIP_DIRS, _scan_python_file
+from .python_dataflow import inspect_python_dataflow
 
 SUPPORTED = {".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".php", ".java", ".go", ".rs"}
 SECRET = re.compile(
@@ -120,8 +121,15 @@ def audit_source(root: str | Path, max_files: int = 1000) -> tuple[list[Finding]
             skipped += 1
             continue
         reviewed += 1
-        findings.extend(_scan_python_file(path) if path.suffix.lower() == ".py"
-                        else _scan_other_language(path))
+        if path.suffix.lower() == ".py":
+            findings.extend(_scan_python_file(path))
+            try:
+                source = path.read_text(encoding="utf-8", errors="replace")
+                findings.extend(inspect_python_dataflow(path, source))
+            except OSError:
+                pass
+        else:
+            findings.extend(_scan_other_language(path))
     if len(candidates) > max_files:
         skipped += len(candidates) - max_files
     return findings, reviewed, skipped
