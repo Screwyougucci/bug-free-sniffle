@@ -8,9 +8,11 @@ class FakeClient:
         self.responses = responses
         self.max_requests = 50
         self.requests_made = 0
+        self.requested_urls = []
 
     def get(self, url):
         self.requests_made += 1
+        self.requested_urls.append(url)
         status, content_type, body = self.responses.get(url, (404, "text/plain", b""))
         return HttpResponse(url, status, {"content-type": content_type}, body, 0.01)
 
@@ -28,7 +30,7 @@ def test_api_discovery_inventories_openapi_paths_without_calling_operations():
     users = next(item for item in result["api_endpoints"] if item["path"] == "/v1/users")
     assert users["methods_documented"] == ["GET", "POST"]
     assert client.requests_made == 7
-    assert all("/v1/" not in url for url in client.responses)
+    assert all("/v1/" not in url for url in client.requested_urls)
 
 
 def test_discovery_rejects_external_sitemap_urls():
