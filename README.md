@@ -446,3 +446,19 @@ The checks intentionally do not flag public caching on ordinary public routes, a
 The same-origin JavaScript review now follows simple local variable assignments and aliases in source order. It recognizes additional browser-controlled inputs, including message event data and values read through `URLSearchParams` or `URL.searchParams`, then checks whether those values reach selected HTML-string DOM or dynamic-code sinks.
 
 A visible reassignment through a small set of recognized sanitizer functions breaks the simple taint chain. This is deliberately conservative and is **not** a full JavaScript parser or taint engine: it does not understand function calls, branches, object properties, inter-module flows, framework abstractions, or every sanitizer. Findings remain low-confidence review candidates; verify the exact code path and sanitizer behavior manually. No JavaScript is executed and no payloads are sent.
+
+
+## Version 2.0.0 — combined web and source-code research
+
+Darth Scanner now combines its authorized web scanning workflow with local source-code review. The new Python dataflow pass tracks simple aliases from common request and environment inputs to selected sensitive operations, including shell APIs, dynamic code evaluation, database calls, outbound HTTP requests, and filesystem access.
+
+The Python pass uses the standard-library AST and does not execute project code. It is intraprocedural and intentionally conservative: it does not resolve interprocedural calls, framework-specific wrappers, complex control flow, or every validation routine. A dataflow match is a review lead, not proof of exploitability. Parameterized constant SQL statements are excluded from this new dataflow rule. Existing source checks remain in place.
+
+Use the existing source audit command:
+
+```powershell
+python -m darthscanner audit-code --path . --max-files 1000 --output darth-source-report.json
+notepad .\darth-source-report.json
+```
+
+Use the existing authorized web scan command for a running application. The two reports can be reviewed together; this release does not automatically infer that a local repository corresponds to a live host. Web scanning still requires an explicit authorization scope and acknowledgement, and source review remains local and non-executing.
