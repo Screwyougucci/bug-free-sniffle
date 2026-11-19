@@ -20,7 +20,7 @@ _SOURCE = re.compile(
     r"\.FormValue\s*\(|\.PostForm\.Get\s*\(|\.URL\.Query\(\)\.Get\s*\()", re.I
 )
 _SINKS = {
-    "sql": (re.compile(r"(?:\.executeQuery|\.executeUpdate|\.execute|\.query|\.exec|\.raw|\.QueryContext|\.ExecContext)\s*\(", re.I), "CWE-89", "Request-derived data may reach a database query through a helper", "Use parameterized queries and bind untrusted values separately from query text."),
+    "sql": (re.compile(r"(?:(?:\.|->)(?:executeQuery|executeUpdate|execute|query|exec|raw|QueryContext|ExecContext))\s*\(", re.I), "CWE-89", "Request-derived data may reach a database query through a helper", "Use parameterized queries and bind untrusted values separately from query text."),
     "ssrf": (re.compile(r"(?:fetch|axios\.(?:get|post|request)|https?\.request|http\.request|\.Do\s*\(|http\.(?:Get|Post)|curl_exec)\s*\(", re.I), "CWE-918", "Request-derived data may reach an outbound request through a helper", "Allowlist destination hosts and schemes; validate resolved addresses and redirects."),
     "file": (re.compile(r"(?:\bopen\s*\(|readFile(?:Sync)?\s*\(|file_get_contents\s*\(|writeFile(?:Sync)?\s*\(|new\s+File\s*\(|Paths\.get\s*\(|os\.Open\s*\()", re.I), "CWE-22", "Request-derived data may reach a filesystem operation through a helper", "Canonicalize paths and verify containment within an allowed base directory."),
     "command": (re.compile(r"(?:exec(?:Sync)?|spawn|system|shell_exec|passthru|Runtime\.getRuntime\(\)\.exec|ProcessBuilder)\s*\(", re.I), "CWE-78", "Request-derived data may reach a process operation through a helper", "Avoid shell interpretation; use fixed executables and structured arguments."),
