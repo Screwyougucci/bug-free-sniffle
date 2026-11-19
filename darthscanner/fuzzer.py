@@ -240,3 +240,32 @@ def run_fuzz_many(url: str, parameters: list[str], scope: Scope,
 
 def observations_to_dict(items: list[FuzzObservation]) -> list[dict]:
     return [asdict(item) for item in items]
+
+def replay_case(url: str, parameter: str, case: str, scope: Scope,
+                client: SafeHttpClient) -> dict:
+    """Repeat exactly one known benign corpus case for manual confirmation."""
+    scope.validate_url(url)
+    variants = dict(_variants())
+    if case not in variants:
+        raise ValueError("Unknown replay case; choose a named benign corpus case.")
+    if client.max_requests - client.requests_made < 1:
+        raise ValueError("Replay requires one remaining request.")
+    value = variants[case]
+    replay_url = mutate_query_parameter(url, parameter, value)
+    response = client.get(replay_url)
+    return {
+        "endpoint_url": url,
+        "replay_url": replay_url,
+        "parameter": parameter,
+        "case": case,
+        "mutation_value": value,
+        "status": response.status,
+        "response_bytes": len(response.body),
+        "elapsed_seconds": round(response.elapsed_seconds, 4),
+        "content_type": response.headers.get("content-type", ""),
+        "response_sha256": sha256(response.body).hexdigest(),
+        "normalized_response_sha256": normalized_body_hash(response.body),
+        "server_error": response.status is not None and response.status >= 500,
+        "note": "single benign GET replay; compare status and hashes with the original research report",
+    }
+
