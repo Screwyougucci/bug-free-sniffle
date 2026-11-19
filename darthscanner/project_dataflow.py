@@ -100,6 +100,18 @@ def _summarize(fn: dict, language: str) -> tuple[dict[str, set[int]], set[int]]:
             clean = _clean(line, language)
             if not clean:
                 continue
+            property_assignment = re.search(r"([$A-Za-z_]\\w*)\\s*(?:\\.|->)\\s*([$A-Za-z_]\\w*)\\s*=\\s*(.+)", clean)
+            if property_assignment:
+                owner, _field, expression = property_assignment.groups()
+                ids = set(_IDENT.findall(expression))
+                if _SOURCE.search(expression) or ids & tainted:
+                    tainted.add(owner)
+            indexed_assignment = re.search(r"([$A-Za-z_]\\w*)\\s*\\[[^]]+\\]\\s*=\\s*(.+)", clean)
+            if indexed_assignment:
+                owner, expression = indexed_assignment.groups()
+                ids = set(_IDENT.findall(expression))
+                if _SOURCE.search(expression) or ids & tainted:
+                    tainted.add(owner)
             assignment = re.search(r"(?:\b(?:const|let|var|final|String|int|long)\s+)?([$A-Za-z_]\w*)\s*(?::=|=)\s*(.+)", clean)
             if assignment:
                 target, expression = assignment.groups()
