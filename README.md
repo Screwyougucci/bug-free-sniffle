@@ -347,3 +347,15 @@ These checks do **not** execute SQL, shell commands, template directives, path t
 A matching database error is evidence of diagnostic disclosure, **not proof of SQL injection**. A 5xx response is an input-handling lead, **not proof of command injection or remote code execution**. SSRF, IDOR, authentication bypass, and authorization-boundary testing require a controlled test environment, test accounts, and explicit permission; they are not claimed as detected by this passive module.
 
 Findings are written into the existing JSON report under `findings`, with category `server-side`, evidence, CWE mapping, confidence, and remediation. Review server logs and reproduce findings in a staging environment before reporting them as vulnerabilities.
+
+
+### Version 1.4.0 — expanded passive server-side review
+
+The normal `scan` command now runs the server-side audit against every already-fetched HTML response and every same-origin JavaScript response. The audit adds:
+- Framework and runtime debug-page signatures (including common Werkzeug, Django, Symfony, Spring, and ASP.NET diagnostic pages).
+- Debug-tooling response headers such as debug tokens and framework toolbar indicators.
+- Explicit server software version disclosure in `Server` and `X-Powered-By` headers.
+- Uncaught runtime error signatures, alongside database diagnostics, stack traces, template errors, and internal filesystem paths.
+- CWE mapping, bounded evidence excerpts, confidence scores, and practical remediation guidance.
+
+These checks are passive: they do not send additional requests or exploit payloads. Version banners are informational, not proof that the identified software is vulnerable. Debug-page signatures require manual validation, and no finding proves code execution, SQL injection, SSRF, IDOR, or unauthorized data access.
