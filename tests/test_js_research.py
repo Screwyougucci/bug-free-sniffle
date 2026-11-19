@@ -47,7 +47,7 @@ class JavaScriptResearchTests(unittest.TestCase):
             "const safe = DOMPurify.sanitize(other);\\n"
             "element.innerHTML = queryValue;",
         )
-        self.assertTrue(any("flows into a risky" in item.title for item in findings))
+        self.assertTrue(any("reaches a risky" in item.title for item in findings))
 
     def test_finds_message_listener_without_obvious_origin_check(self):
         findings = inspect_javascript_source(
