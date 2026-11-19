@@ -16,7 +16,7 @@ _RULES = (
      re.compile(r"(?:union\s+select|sleep\s*\(|benchmark\s*\(|information_schema|or\s+1\s*=\s*1)", re.I),
      "Review the matching route and use parameterized queries; a logged pattern is not proof of successful injection."),
     ("web-command-probe", "Command-injection-like input in server log", "high", "web",
-     re.compile(r"(?:;\s*(?:id|whoami|uname|cat)\b|\$\([^)]{1,80}\)|\\x60[^\\x60]{1,80}\\x60)", re.I),
+     re.compile(r"(?:;\s*(?:id|whoami|uname|cat)\b|\$\([^)]{1,80}\)|\x60[^\x60]{1,80}\x60)", re.I),
      "Review any shell invocation on the route; avoid shell interpolation and use fixed argument arrays."),
     ("web-ssrf-private-target", "Request for a private or metadata address in server log", "high", "web",
      re.compile(r"(?:169\.254\.169\.254|127\.0\.0\.1|localhost|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})", re.I),
