@@ -32,7 +32,7 @@ _SINKS = {
     "ssrf": (re.compile(r"(?:fetch|axios\.(?:get|post|request)|https?\.request|http\.request|URL\(|new\s+URL\(|\.Do\s*\(|http\.Get|http\.Post)\s*\(", re.I),
              "CWE-918", "Request-derived data reaches an outbound URL/request operation",
              "Allowlist destination hosts and schemes; reject private, loopback, link-local, and reserved IP ranges after DNS resolution and on redirects."),
-    "file": (re.compile(r"(?:\bopen\s*\(|readFile(?:Sync)?\s*\(|writeFile(?:Sync)?\s*\(|new\s+File\s*\(|Paths\.get\s*\(|os\.Open\s*\()", re.I),
+    "file": (re.compile(r"(?:\bopen\s*\(|readFile(?:Sync)?\s*\(|file_get_contents\s*\(|writeFile(?:Sync)?\s*\(|new\s+File\s*\(|Paths\.get\s*\(|os\.Open\s*\()", re.I),
              "CWE-22", "Request-derived data reaches a filesystem operation",
              "Resolve paths against a fixed base directory, verify canonical containment, and use an allowlist."),
     "command": (re.compile(r"(?:exec|execSync|spawn|system|shell_exec|passthru|Runtime\.getRuntime\(\)\.exec|ProcessBuilder)\s*\(", re.I),
