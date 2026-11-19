@@ -16,7 +16,7 @@ from .discovery import discover_query_targets
 from .cve import load_inventory, load_nvd_feed, match_cves
 from .exposure import probe_sensitive_paths
 from .fingerprint import fingerprint_response
-from .fuzzer import observations_to_dict, run_fuzz_many
+from .fuzzer import observations_to_dict, replay_case, run_fuzz_many
 from .http_client import SafeHttpClient
 from .method_checks import inspect_http_methods
 from .report import write_report
@@ -61,6 +61,17 @@ def _parser() -> argparse.ArgumentParser:
     research.add_argument("--max-targets", type=int, default=30, help="maximum discovered query URLs (1-50)")
     research.add_argument("--max-cases", type=int, default=32, help="maximum benign mutations total (1-32)")
     research.add_argument("--output", default="darth-research-report.json")
+
+    replay = commands.add_parser(
+        "replay",
+        help="repeat one named benign fuzz case exactly once for confirmation",
+    )
+    replay.add_argument("--url", required=True, help="original query URL from a research report")
+    replay.add_argument("--param", required=True, help="query parameter name")
+    replay.add_argument("--case", required=True, help="named benign case from the JSON report")
+    replay.add_argument("--scope", default="scope.json")
+    replay.add_argument("--acknowledge-authorization", action="store_true")
+    replay.add_argument("--output", default="darth-replay-report.json")
 
     cve = commands.add_parser("cve", help="match a software inventory against a local NVD 2.0 JSON feed")
     cve.add_argument("--inventory", required=True, help="JSON inventory containing CPE 2.3 component identifiers")
@@ -144,6 +155,20 @@ def main(argv: list[str] | None = None) -> int:
 
         scope = load_scope(args.scope)
         require_authorization(scope, args.acknowledge_authorization)
+
+        if args.command == "replay":
+            scope.validate_url(args.url)
+            client = SafeHttpClient(scope, max_requests=1)
+            observation = replay_case(args.url, args.param, args.case, scope, client)
+            _write_bundle(
+                args, target=args.url, requests_made=client.requests_made,
+                pages=[], findings=[], fuzz_observations=[observation],
+            )
+            print(f"Replayed benign case {args.case!r} for parameter {args.param!r}.")
+            print(f"HTTP status: {observation['status']}; response bytes: {observation['response_bytes']}.")
+            print("Compare the response hash with the original research report; one replay is not proof of a vulnerability.")
+            print(f"JSON: {args.output}")
+            return 0
 
         if args.command == "research":
             if not 1 <= args.max_pages <= 40:
