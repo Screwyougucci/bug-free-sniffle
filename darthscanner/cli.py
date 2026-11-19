@@ -12,7 +12,7 @@ from .checks import inspect_html, inspect_http
 from .browser_audit import inspect_browser_code
 from .js_research import extract_same_origin_script_urls, inspect_javascript_source
 from .crawler import crawl
-from .discovery import discover_query_targets
+from .discovery import discover_query_targets\nfrom .api_discovery import discover_static_get_targets
 from .cve import load_inventory, load_nvd_feed, match_cves
 from .exposure import probe_sensitive_paths
 from .fingerprint import fingerprint_response
@@ -182,6 +182,46 @@ def main(argv: list[str] | None = None) -> int:
             research_scope = replace(scope, max_pages=min(scope.max_pages, args.max_pages))
             responses = crawl(args.target, research_scope, client)
             targets = discover_query_targets(responses, scope, max_targets=args.max_targets)
+
+            # Static API route discovery: fetch a small number of same-origin scripts
+            # already linked by crawled pages, without executing JavaScript. Preserve
+            # request budget for actual fuzzing and only queue literal GET URLs.
+            script_urls = []
+            for page in responses:
+                script_urls.extend(extract_same_origin_script_urls(page, limit=12))
+            script_responses = []
+            seen_scripts = set()
+            script_budget = min(8, max(0, client.max_requests - client.requests_made - 4))
+            api_targets = []
+            for script_url in script_urls:
+                if len(script_responses) >= script_budget:
+                    break
+                if script_url in seen_scripts:
+                    continue
+                seen_scripts.add(script_url)
+                try:
+                    scope.validate_url(script_url)
+                    script_response = client.get(script_url)
+                except (ValueError, RuntimeError):
+                    continue
+                if script_response.status is None or script_response.status >= 400:
+                    continue
+                content_type = script_response.headers.get("content-type", "").lower()
+                if "javascript" not in content_type and not urlsplit(script_url).path.lower().endswith((".js", ".mjs", ".cjs")):
+                    continue
+                script_responses.append(script_response)
+                api_targets.extend(discover_static_get_targets(
+                    script_url, script_response.text, scope,
+                    max_targets=max(1, args.max_targets - len(targets)),
+                ))
+
+            # Merge page links and statically discovered API routes without duplicates.
+            seen_target_urls = {str(item["url"]) for item in targets}
+            for item in api_targets:
+                if str(item["url"]) not in seen_target_urls and len(targets) < args.max_targets:
+                    targets.append(item)
+                    seen_target_urls.add(str(item["url"]))
+
             observations = []
             mutations = 0
             for target in targets:
@@ -218,13 +258,20 @@ def main(argv: list[str] | None = None) -> int:
                  "error": response.error, "resource_type": "html-or-linked-resource"}
                 for response in responses
             ]
+            pages.extend(
+                {"url": response.url, "status": response.status,
+                 "response_bytes": len(response.body),
+                 "elapsed_seconds": round(response.elapsed_seconds, 3),
+                 "error": response.error, "resource_type": "javascript-static-review"}
+                for response in script_responses
+            )
             _write_bundle(
                 args, target=args.target, requests_made=client.requests_made,
                 pages=pages, findings=[],
                 fuzz_observations=observations_to_dict(observations),
             )
             anomaly_count = sum(item.anomaly_score >= 20 for item in observations)
-            print(f"Discovered {len(targets)} same-origin query URL(s) across {len(responses)} crawled page(s).")
+            print(f"Discovered {len(targets)} same-origin query URL(s) across {len(responses)} crawled page(s) and {len(script_responses)} static JavaScript file(s); {len(api_targets)} API route candidate(s) came from literal GET calls.")
             print(f"Coverage-guided tests: {mutations} benign mutations across {len({item.endpoint_url for item in observations})} endpoint(s) and {len({(item.endpoint_url, item.parameter) for item in observations})} parameter(s).")
             print(f"High-priority anomaly signals (score >= 20): {anomaly_count}; total HTTP requests: {client.requests_made}.")
             print("Scores prioritize unusual behavior; they are not vulnerability probabilities or proof of exploitability.")
