@@ -89,6 +89,30 @@ function runQuery(value, db) {
             findings = scan_project_cross_function(path)
             self.assertFalse(any("CWE-89" in item.cwe_ids for item in findings), findings)
 
+    def test_object_property_assignment_flows_through_helper(self):
+        self._check(".js", """
+function handler(req, db) {
+  const payload = {};
+  payload.query = req.query.q;
+  runQuery(payload, db);
+}
+function runQuery(payload, db) {
+  db.execute(payload.query);
+}
+""")
+
+    def test_indexed_property_assignment_flows_through_helper(self):
+        self._check(".ts", """
+function handler(req: Request, db: DB) {
+  const payload: any = {};
+  payload["query"] = req.query.q;
+  runQuery(payload, db);
+}
+function runQuery(payload: any, db: DB) {
+  db.execute(payload.query);
+}
+""")
+
 
 if __name__ == "__main__":
     unittest.main()
