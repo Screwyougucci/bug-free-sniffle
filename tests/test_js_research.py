@@ -63,6 +63,38 @@ class JavaScriptResearchTests(unittest.TestCase):
         )
         self.assertTrue(any("prototype mutation" in item.title for item in findings))
 
+    def test_traces_multiple_local_aliases_to_dom_sink(self):
+        source = (
+            "const first = window.location.search;\\n"
+            "let second = first;\\n"
+            "const third = second;\\n"
+            "node.innerHTML = third;"
+        )
+        findings = inspect_javascript_source("https://example.test/app.js", source)
+        self.assertTrue(any("reaches a risky" in item.title for item in findings))
+
+    def test_sanitized_reassignment_breaks_simple_taint_chain(self):
+        source = (
+            "let value = location.hash;\\n"
+            "value = DOMPurify.sanitize(value);\\n"
+            "node.innerHTML = value;"
+        )
+        findings = inspect_javascript_source("https://example.test/app.js", source)
+        self.assertFalse(any("reaches a risky" in item.title for item in findings))
+
+    def test_recognizes_url_search_params_get_source(self):
+        source = (
+            "const value = new URLSearchParams(location.search).get('q');\\n"
+            "node.insertAdjacentHTML('beforeend', value);"
+        )
+        findings = inspect_javascript_source("https://example.test/app.js", source)
+        self.assertTrue(any("reaches a risky" in item.title for item in findings))
+
+    def test_safe_text_content_is_not_a_risky_sink(self):
+        source = "const value = location.hash; node.textContent = value;"
+        findings = inspect_javascript_source("https://example.test/app.js", source)
+        self.assertFalse(any("reaches a risky" in item.title for item in findings))
+
     def test_ignores_benign_javascript(self):
         self.assertEqual(
             inspect_javascript_source("https://example.test/app.js", "console.log('hello');"),
