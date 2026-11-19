@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from collections import Counter
 import sys
 from urllib.parse import urlsplit
@@ -11,6 +12,7 @@ from .checks import inspect_html, inspect_http
 from .browser_audit import inspect_browser_code
 from .js_research import extract_same_origin_script_urls, inspect_javascript_source
 from .crawler import crawl
+from .discovery import discover_query_targets
 from .cve import load_inventory, load_nvd_feed, match_cves
 from .exposure import probe_sensitive_paths
 from .fingerprint import fingerprint_response
@@ -47,6 +49,18 @@ def _parser() -> argparse.ArgumentParser:
     fuzz.add_argument("--acknowledge-authorization", action="store_true")
     fuzz.add_argument("--max-cases", type=int, default=16, help="1-32 total benign mutations across selected parameters")
     fuzz.add_argument("--output", default="darth-fuzz-report.json")
+
+    research = commands.add_parser(
+        "research",
+        help="discover same-origin query routes and run bounded coverage-guided GET robustness tests",
+    )
+    research.add_argument("--target", required=True, help="starting URL on the authorized host")
+    research.add_argument("--scope", default="scope.json")
+    research.add_argument("--acknowledge-authorization", action="store_true")
+    research.add_argument("--max-pages", type=int, default=12, help="maximum pages to crawl before fuzzing (1-40)")
+    research.add_argument("--max-targets", type=int, default=30, help="maximum discovered query URLs (1-50)")
+    research.add_argument("--max-cases", type=int, default=32, help="maximum benign mutations total (1-32)")
+    research.add_argument("--output", default="darth-research-report.json")
 
     cve = commands.add_parser("cve", help="match a software inventory against a local NVD 2.0 JSON feed")
     cve.add_argument("--inventory", required=True, help="JSON inventory containing CPE 2.3 component identifiers")
@@ -130,6 +144,67 @@ def main(argv: list[str] | None = None) -> int:
 
         scope = load_scope(args.scope)
         require_authorization(scope, args.acknowledge_authorization)
+
+        if args.command == "research":
+            if not 1 <= args.max_pages <= 40:
+                raise ValueError("--max-pages must be between 1 and 40.")
+            if not 1 <= args.max_targets <= 50:
+                raise ValueError("--max-targets must be between 1 and 50.")
+            if not 1 <= args.max_cases <= 32:
+                raise ValueError("--max-cases must be between 1 and 32.")
+            scope.validate_url(args.target)
+            client = SafeHttpClient(scope)
+            research_scope = replace(scope, max_pages=min(scope.max_pages, args.max_pages))
+            responses = crawl(args.target, research_scope, client)
+            targets = discover_query_targets(responses, scope, max_targets=args.max_targets)
+            observations = []
+            mutations = 0
+            for target in targets:
+                if mutations >= args.max_cases:
+                    break
+                remaining_requests = client.max_requests - client.requests_made
+                remaining_mutations = args.max_cases - mutations
+                if remaining_requests < 2 or remaining_mutations < 1:
+                    break
+                parameters = list(target["parameters"])
+                selected_count = min(8, len(parameters), remaining_requests // 2, remaining_mutations)
+                if selected_count < 1:
+                    continue
+                selected = parameters[:selected_count]
+                mutation_budget = min(remaining_mutations, remaining_requests - selected_count)
+                if mutation_budget < selected_count:
+                    selected = selected[:mutation_budget]
+                    mutation_budget = len(selected)
+                if not selected:
+                    continue
+                try:
+                    batch = run_fuzz_many(
+                        str(target["url"]), selected, scope, client, mutation_budget
+                    )
+                except ValueError:
+                    continue
+                observations.extend(batch)
+                mutations += len(batch)
+
+            pages = [
+                {"url": response.url, "status": response.status,
+                 "response_bytes": len(response.body),
+                 "elapsed_seconds": round(response.elapsed_seconds, 3),
+                 "error": response.error, "resource_type": "html-or-linked-resource"}
+                for response in responses
+            ]
+            _write_bundle(
+                args, target=args.target, requests_made=client.requests_made,
+                pages=pages, findings=[],
+                fuzz_observations=observations_to_dict(observations),
+            )
+            anomaly_count = sum(item.anomaly_score >= 20 for item in observations)
+            print(f"Discovered {len(targets)} same-origin query URL(s) across {len(responses)} crawled page(s).")
+            print(f"Coverage-guided tests: {mutations} benign mutations across {len({item.endpoint_url for item in observations})} endpoint(s) and {len({(item.endpoint_url, item.parameter) for item in observations})} parameter(s).")
+            print(f"High-priority anomaly signals (score >= 20): {anomaly_count}; total HTTP requests: {client.requests_made}.")
+            print("Scores prioritize unusual behavior; they are not vulnerability probabilities or proof of exploitability.")
+            print(f"JSON: {args.output}")
+            return 0
 
         if args.command == "scan":
             scope.validate_url(args.target)
