@@ -311,6 +311,48 @@ def inspect_http(response) -> list[Finding]:
             kind="observation",
         ))
 
+    # Shared-cache review: public/s-maxage responses on account-like routes can
+    # expose one user's response to another user if intermediaries cache it.
+    cache_control = headers.get("cache-control", "")
+    cache_directives = {
+        part.strip().split("=", 1)[0].lower()
+        for part in cache_control.split(",") if part.strip()
+    }
+    sensitive_segments = {
+        "account", "accounts", "admin", "billing", "checkout", "export",
+        "invoice", "invoices", "me", "order", "orders", "payment",
+        "payments", "private", "profile", "profiles", "session", "settings",
+        "user", "users",
+    }
+    path_segments = {
+        part.lower() for part in source_parts.path.split("/")
+        if part and not part.startswith("{")
+    }
+    if (response.status == 200 and path_segments & sensitive_segments
+            and "no-store" not in cache_directives
+            and "private" not in cache_directives
+            and ("public" in cache_directives or "s-maxage" in cache_directives)):
+        findings.append(_finding(
+            "cache", "Sensitive-looking route permits shared caching", "medium", "medium", response,
+            "A 200 response on a sensitive-looking path includes Cache-Control public or s-maxage without private/no-store. Response contents are not copied into evidence.",
+            "Use Cache-Control: private or no-store for user-specific or privileged responses; verify CDN cache keys and authenticated-response bypass rules.",
+        ))
+
+    # When CORS returns a concrete origin, caches need to distinguish Origin
+    # unless the response is intentionally invariant for every requesting origin.
+    vary_tokens = {
+        token.strip().lower()
+        for token in headers.get("vary", "").split(",") if token.strip()
+    }
+    if (allow_origin.strip() not in {"", "*", "null"}
+            and "vary" not in vary_tokens and "origin" not in vary_tokens):
+        findings.append(_finding(
+            "cors", "Origin-specific CORS response does not declare Vary: Origin", "low", "low", response,
+            "Access-Control-Allow-Origin contains a concrete origin, but the Vary header does not include Origin. This can cause shared caches to reuse a response across origin contexts.",
+            "If the allowed origin is selected dynamically, emit Vary: Origin and verify CDN cache behavior. A static single-origin policy may not require it.",
+            kind="observation",
+        ))
+
     server = headers.get("server")
     powered_by = headers.get("x-powered-by")
     for title, name, value in [
