@@ -468,3 +468,10 @@ Unlike the earlier checks that flagged any dynamic URL or path expression, these
 The local `audit-code` command now adds bounded source-to-sink review for JavaScript, TypeScript, PHP, Java, and Go, alongside the Python AST pass. It recognizes common web-request input patterns, follows simple same-file local assignments, and looks for nearby database query, outbound request, filesystem, process, dynamic-template, and deserialization operations.
 
 This additional pass is line-oriented and heuristic. It does not fully parse these languages, understand lexical scopes or control flow, follow function boundaries, or prove that validation and sanitization are absent. It can miss flows split across lines and can produce false positives when identifiers are reused. Findings are low-confidence review candidates, not validated vulnerabilities. The scanner does not execute source code or send network requests during source review.
+
+
+## Version 2.2.0 — Project-wide Python call-graph research
+
+The `audit-code` workflow now includes a bounded project-level Python analysis pass. It indexes functions across the scanned Python files, resolves straightforward local and imported helper names, builds conservative parameter-to-sink and parameter-to-return summaries, and checks whether request-derived arguments cross function boundaries into sensitive operations.
+
+This pass is intentionally bounded and conservative. It does not execute code, resolve arbitrary dynamic dispatch, fully interpret relative imports, model every branch or closure, or establish runtime reachability. Call-graph results are low-confidence leads requiring review. The existing per-file checks remain enabled.
