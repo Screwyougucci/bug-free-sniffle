@@ -43,8 +43,8 @@ class JavaScriptResearchTests(unittest.TestCase):
     def test_traces_browser_input_variable_to_dom_sink(self):
         findings = inspect_javascript_source(
             "https://example.test/app.js",
-            "const queryValue = location.search;\\n"
-            "const safe = DOMPurify.sanitize(other);\\n"
+            "const queryValue = location.search;\n"
+            "const safe = DOMPurify.sanitize(other);\n"
             "element.innerHTML = queryValue;",
         )
         self.assertTrue(any("reaches a risky" in item.title for item in findings))
@@ -65,9 +65,9 @@ class JavaScriptResearchTests(unittest.TestCase):
 
     def test_traces_multiple_local_aliases_to_dom_sink(self):
         source = (
-            "const first = window.location.search;\\n"
-            "let second = first;\\n"
-            "const third = second;\\n"
+            "const first = window.location.search;\n"
+            "let second = first;\n"
+            "const third = second;\n"
             "node.innerHTML = third;"
         )
         findings = inspect_javascript_source("https://example.test/app.js", source)
@@ -75,8 +75,8 @@ class JavaScriptResearchTests(unittest.TestCase):
 
     def test_sanitized_reassignment_breaks_simple_taint_chain(self):
         source = (
-            "let value = location.hash;\\n"
-            "value = DOMPurify.sanitize(value);\\n"
+            "let value = location.hash;\n"
+            "value = DOMPurify.sanitize(value);\n"
             "node.innerHTML = value;"
         )
         findings = inspect_javascript_source("https://example.test/app.js", source)
@@ -84,7 +84,7 @@ class JavaScriptResearchTests(unittest.TestCase):
 
     def test_recognizes_url_search_params_get_source(self):
         source = (
-            "const value = new URLSearchParams(location.search).get('q');\\n"
+            "const value = new URLSearchParams(location.search).get('q');\n"
             "node.insertAdjacentHTML('beforeend', value);"
         )
         findings = inspect_javascript_source("https://example.test/app.js", source)
