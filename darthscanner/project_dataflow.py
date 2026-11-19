@@ -106,8 +106,7 @@ def _summarize(fn: dict, language: str) -> tuple[dict[str, set[int]], set[int]]:
                 ids = set(_IDENT.findall(expression))
                 if _SOURCE.search(expression) or ids & tainted:
                     tainted.add(target)
-                else:
-                    tainted.discard(target)
+                # Monotonic union approximates merging both sides of branches.
             ids = set(_IDENT.findall(clean))
             if re.search(r"\breturn\b", clean) and ids & tainted:
                 returns.add(parameter_index)
@@ -176,8 +175,7 @@ def scan_project_cross_function(root: str | Path, max_files: int = 1000) -> list
                 ids = set(_IDENT.findall(expression))
                 if _SOURCE.search(expression) or ids & tainted:
                     tainted.add(target)
-                else:
-                    tainted.discard(target)
+                # Monotonic union approximates merging both sides of branches.
             for call in re.finditer(r"\b([A-Za-z_$][\w$]*)\s*\(([^()]*)\)", clean):
                 name, raw_args = call.groups()
                 candidates = by_name.get(name, [])
