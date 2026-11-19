@@ -6,10 +6,11 @@ from darthscanner.server_side_audit import (
 )
 
 
-def response(body: bytes, status: int = 500):
+def response(body: bytes = b"", status: int = 500, headers=None):
     return SimpleNamespace(
         status=status,
         body=body,
+        headers=headers or {},
         url="https://app.example.test/api/item",
     )
 
@@ -27,6 +28,24 @@ def test_detects_stack_trace_and_internal_path():
         response(b'Traceback (most recent call last): File "/srv/app/main.py", line 42')
     )
     assert {item.kind for item in findings} >= {"stack-trace", "local-path"}
+
+
+def test_detects_framework_debug_page():
+    findings = inspect_server_response(response(b"Werkzeug Debugger is active"))
+    assert any(item.kind == "debug-page" and item.cwe_ids == ["CWE-489"] for item in findings)
+
+
+def test_detects_debug_headers_and_version_banner():
+    findings = inspect_server_response(response(
+        headers={
+            "x-debug-token": "abc123",
+            "server": "nginx/1.24.0",
+            "x-powered-by": "PHP/8.2",
+        },
+        status=200,
+    ))
+    assert any(item.kind == "debug-header" for item in findings)
+    assert sum(item.kind == "server-banner" for item in findings) == 1
 
 
 def test_ignores_ordinary_response():
