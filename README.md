@@ -446,3 +446,18 @@ The checks intentionally do not flag public caching on ordinary public routes, a
 The same-origin JavaScript review now follows simple local variable assignments and aliases in source order. It recognizes additional browser-controlled inputs, including message event data and values read through `URLSearchParams` or `URL.searchParams`, then checks whether those values reach selected HTML-string DOM or dynamic-code sinks.
 
 A visible reassignment through a small set of recognized sanitizer functions breaks the simple taint chain. This is deliberately conservative and is **not** a full JavaScript parser or taint engine: it does not understand function calls, branches, object properties, inter-module flows, framework abstractions, or every sanitizer. Findings remain low-confidence review candidates; verify the exact code path and sanitizer behavior manually. No JavaScript is executed and no payloads are sent.
+
+
+## Version 2.0.0 — Python request-to-sink vulnerability research
+
+The local `audit-code` command now performs a bounded AST-based data-flow pass for Python in addition to the existing source-pattern checks. It follows simple assignments from common web request inputs (Flask/Django/FastAPI-style request fields and FastAPI parameter helpers) into selected sensitive operations:
+
+- SQL execution calls (`execute`, `executemany`, and `raw`) — CWE-89 candidates.
+- Outbound HTTP clients and URL openers — SSRF candidates (CWE-918).
+- File open/download operations — path traversal candidates (CWE-22).
+- Process APIs — command-injection candidates (CWE-78).
+- Dynamic template compilation — template-injection candidates (CWE-94).
+- Native object deserializers — unsafe-deserialization candidates (CWE-502).
+
+Unlike the earlier checks that flagged any dynamic URL or path expression, these new findings require a recognizable request-input source and a simple local assignment path to a sink. Constant SQL and constant URLs are not flagged by this data-flow pass. The analysis is intentionally conservative and does not model all function calls, branches, interprocedural flows, framework wrappers, validation, or sanitizer semantics. Findings remain low-confidence review candidates, not proof of exploitable vulnerabilities. No source code is executed and no network requests are made.
+
