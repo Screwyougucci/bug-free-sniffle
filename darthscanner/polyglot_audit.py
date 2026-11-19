@@ -13,6 +13,7 @@ from .checks import Finding
 from .source_audit import MAX_FILE_BYTES, SKIP_DIRS, _scan_python_file
 from .python_taint import scan_python_taint_flows
 from .multilang_taint import scan_multilang_taint
+from .interprocedural_audit import audit_python_project
 
 SUPPORTED = {".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".php", ".java", ".go", ".rs"}
 SECRET = re.compile(
@@ -128,6 +129,7 @@ def audit_source(root: str | Path, max_files: int = 1000) -> tuple[list[Finding]
         else:
             findings.extend(_scan_other_language(path))
             findings.extend(scan_multilang_taint(path))
+    findings.extend(audit_python_project(root_path, max_files=max_files))
     if len(candidates) > max_files:
         skipped += len(candidates) - max_files
     return findings, reviewed, skipped
