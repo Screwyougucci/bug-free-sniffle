@@ -91,7 +91,7 @@ def normalized_body_hash(body: bytes) -> str:
     text = body[:1_000_000].decode("utf-8", errors="replace")
     text = re.sub(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b", "<UUID>", text)
     text = re.sub(r"\b20\d{2}-\d{2}-\d{2}[T ][0-9:.+-]+Z?\b", "<TIMESTAMP>", text)
-    text = re.sub(r'(?i)(\b(?:request[_-]?id|trace[_-]?id|nonce|csrf[_-]?token)\b["']?\s*[:=]\s*)["\'][^"\']{6,}["\']', r"\1<VOLATILE>", text)
+    text = re.sub(r"(?i)(\b(?:request[_-]?id|trace[_-]?id|nonce|csrf[_-]?token)\b[\"']?\s*[:=]\s*)[\"'][^\"']{6,}[\"']", r"\1<VOLATILE>", text)
     text = re.sub(r"\b[0-9a-f]{24,}\b", "<HEX>", text, flags=re.I)
     text = re.sub(r"\s+", " ", text).strip()
     return sha256(text.encode("utf-8")).hexdigest()
