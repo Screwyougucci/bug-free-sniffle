@@ -10,7 +10,7 @@ _RULES = (
      re.compile(r"(?:401|403).{0,100}(?:login|signin|auth)|(?:failed|invalid).{0,40}(?:password|login|authentication)", re.I),
      "Review source distribution, account lockout controls, and whether failures are expected."),
     ("web-path-traversal-probe", "Path traversal pattern in server log", "high", "web",
-     re.compile(r"(?:\.\./|%2e%2e(?:%2f|/)|%252e%252e)", re.I),
+     re.compile(r"(?:\.\./|\.\.%2f|%2e%2e(?:%2f|/)|%252e%252e)", re.I),
      "Confirm normalization occurs before path resolution and enforce an allowlisted file root."),
     ("web-sqli-probe", "SQL injection-like input in server log", "medium", "web",
      re.compile(r"(?:union\s+select|sleep\s*\(|benchmark\s*\(|information_schema|or\s+1\s*=\s*1)", re.I),
