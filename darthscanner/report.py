@@ -185,7 +185,7 @@ const tiles=[
  ["Findings",coverage.findings_total??findings.length],
  ["CVE candidates",coverage.cve_matches??0],
  ["Exposed paths checked",coverage.exposure_paths_checked??0],
- ["Software identified",coverage.software_components_identified??0],["Source files reviewed",coverage.source_files_reviewed??0]
+ ["Software identified",coverage.software_components_identified??0],["API paths discovered",coverage.api_endpoints_discovered??0],["Metadata resources",coverage.metadata_resources_checked??0],["Source files reviewed",coverage.source_files_reviewed??0]
 ];
 for(const [label,value] of tiles){const card=document.createElement("div");card.className="tile";const small=document.createElement("small");small.textContent=label;const number=document.createElement("div");number.className="num";number.textContent=value;card.append(small,number);$("summary").append(card)}
 function addField(parent,label,value,cls){if(value===undefined||value===null||value==="")return;const wrap=document.createElement("div");wrap.className="field";const name=document.createElement("b");name.textContent=label;const text=document.createElement("p");if(Array.isArray(value))text.textContent=value.join(", ");else text.textContent=String(value);if(cls)text.className=cls;wrap.append(name,text);parent.append(wrap)}
