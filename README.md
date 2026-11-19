@@ -359,3 +359,45 @@ The normal `scan` command now runs the server-side audit against every already-f
 - CWE mapping, bounded evidence excerpts, confidence scores, and practical remediation guidance.
 
 These checks are passive: they do not send additional requests or exploit payloads. Version banners are informational, not proof that the identified software is vulnerable. Debug-page signatures require manual validation, and no finding proves code execution, SQL injection, SSRF, IDOR, or unauthorized data access.
+
+
+## Version 1.5.0 — continuous server watch and Sigma-style log review
+
+### Continuous watch mode
+
+The new `watch` command repeatedly runs the existing bounded web/server scan. It does not stop when it finds a security issue: it prints each previously unseen finding immediately, saves it, then continues with the next scheduled cycle.
+
+- Default interval: 300 seconds; minimum: 60 seconds.
+- Default duration: unlimited cycles until you press Ctrl+C.
+- `--max-cycles N` is available for a finite test; `0` means unlimited.
+- Stable finding IDs prevent the same issue from being announced repeatedly.
+- A state file stores previously seen IDs and accumulated findings. Re-run the same command to resume.
+- Each scan cycle still obeys the exact-host allowlist, authorization acknowledgement, request budget, timeout, and request delay in the scope file.
+- The latest individual scan is saved separately from the accumulated watch report.
+
+Example (PowerShell):
+
+```powershell
+darth-scanner watch `
+  --target "https://your-authorized-host.example/" `
+  --scope ".\scope.json" `
+  --acknowledge-authorization `
+  --interval-seconds 300 `
+  --output ".\darth-watch-report.json" `
+  --state ".\darth-watch-state.json"
+
+notepad .\darth-watch-report.json
+```
+
+Stop with Ctrl+C. To resume, run the same command again with the same state file. For a short test, add `--max-cycles 2`. Continuous mode is intentionally not a high-speed loop: every pass is a bounded scan, and the interval cannot be set below 60 seconds.
+
+### Sigma-style local server-log review
+
+The new `audit-logs` command applies built-in Sigma-inspired detections to a local text or JSONL server log. It performs no network requests. Initial rules flag patterns associated with authentication failures, traversal probes, SQL injection probes, command-injection probes, SSRF/private-address attempts, and debug/stack-trace disclosure.
+
+```powershell
+darth-scanner audit-logs --path ".\server.log" --output ".\darth-sigma-report.json"
+notepad .\darth-sigma-report.json
+```
+
+These are lightweight built-in Sigma-style rules, not a full Sigma YAML engine. Log matches show that a pattern appeared in a log line; they do not prove the request succeeded or that a vulnerability exists. Review the corresponding application and reverse-proxy logs before drawing conclusions. The reader has file-size and line-count limits and does not modify the source log.
