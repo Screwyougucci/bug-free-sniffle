@@ -42,6 +42,9 @@ def run_watch(*, target: str, scope: str, acknowledged: bool, interval: int,
                        "--acknowledge-authorization", "--output", str(latest_file)])
             if rc != 0:
                 print(f"[WATCH] Scan cycle failed with exit code {rc}; retrying after the interval.")
+                state["last_cycle_exit_code"] = rc
+                state["last_error_at"] = _utc()
+                state_file.write_text(json.dumps(state, indent=2, ensure_ascii=False), encoding="utf-8")
             else:
                 try:
                     report = json.loads(latest_file.read_text(encoding="utf-8"))
@@ -83,7 +86,7 @@ def run_watch(*, target: str, scope: str, acknowledged: bool, interval: int,
                 print(f"[WATCH] Cycle {state['cycles']} complete; {len(new_items)} new finding(s); "
                       f"{len(known)} unique finding(s) saved to {output_file}.")
             remaining = interval - (time.monotonic() - started)
-            if (max_cycles == 0 or state["cycles"] < max_cycles) and remaining > 0:
+            if (max_cycles == 0 or attempts_this_run < max_cycles) and remaining > 0:
                 time.sleep(remaining)
     except KeyboardInterrupt:
         print("\n[WATCH] Stop requested. Saving state and exiting cleanly.")
