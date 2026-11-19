@@ -282,3 +282,52 @@ The score is a triage priority, **not** a probability of vulnerability. Normaliz
 ### 12. JavaScript source-to-sink review
 
 Same-origin JavaScript review now adds a lightweight assignment-to-sink heuristic: it can follow a directly assigned browser-controlled variable (for example, a URL fragment or query string) into nearby HTML-string DOM or dynamic-code sinks. It recognizes a few common sanitizer assignments but is not a full JavaScript parser or taint engine. It can miss aliases, cross-function flows, framework abstractions, and sanitizers; findings remain low-confidence review leads.
+
+
+## Version 1.2.0 — any explicitly authorized target and evidence-first reports
+
+Darth Scanner is not tied to a particular domain. For each assessment, edit
+`scope.json` and list the exact hostnames you are authorized to test. The same
+scanner can then assess a different client, staging system, or bug-bounty asset
+by changing the target and scope file. Exact hostname matching remains enabled:
+subdomains are not automatically included. Add each permitted hostname explicitly,
+and keep the scope within the program's written rules.
+
+Example scope for a program that explicitly permits two assets:
+
+```json
+{
+  "authorized": true,
+  "allowed_hosts": ["app.example.test", "api.example.test"],
+  "max_pages": 30,
+  "max_requests": 50,
+  "request_delay_seconds": 1.0,
+  "timeout_seconds": 8
+}
+```
+
+### Evidence and reproduction
+
+Research reports now include a `reproduction_evidence` array. Each record preserves
+the exact endpoint (with credential-like query values redacted), GET method,
+parameter, built-in benign case name, baseline and observed HTTP status, response
+sizes, content type, latency, raw and normalized SHA-256 hashes, anomaly score,
+and a copy/paste replay command. Replay sends exactly one named benign GET test.
+The report also states when a server-side source location is unavailable: black-box
+HTTP responses cannot reveal the server's source file or line number.
+
+For code you are authorized to inspect locally, use `audit-code`. Source findings
+are static review leads and should be checked against the exact file and line in
+your local checkout. A remote black-box finding must not be assigned an invented
+source path or line number. When source code is unavailable, report the affected
+route, parameter, request/response evidence, and reproduction steps instead.
+
+### Bug-bounty PoC quality
+
+A PoC should be a minimal, repeatable demonstration of the observed behavior, not
+an exploit payload generator. Start with the baseline request, change one input,
+record the response difference, and explain the security impact only when it is
+demonstrated. The scanner's generated replay recipe is deliberately limited to
+its named benign test corpus. It does not generate account-takeover, data-theft,
+destructive, persistence, or unauthorized-access payloads. Follow each program's
+scope, rate limits, and disclosure rules.
