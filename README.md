@@ -429,3 +429,13 @@ Darth Scanner now reviews any OpenAPI document it already discovers, without inv
 These are intentionally conservative schema-review candidates. A missing OpenAPI security declaration does **not** prove the live endpoint is unauthenticated; gateways or application middleware may enforce access controls outside the schema. A sensitive-looking path may also be intentionally public. Verify with the service owner and approved test accounts before classifying a finding as a vulnerability.
 
 The review is passive, adds no network requests, does not send payloads, and does not call API operations. It analyzes only metadata already fetched within the existing same-origin request budget. Reports include the exact documented method/path and remediation guidance, but never API key values.
+
+
+## Version 1.8.0 — subtle cache and CORS edge cases
+
+The normal passive HTTP review now adds two small but useful checks without making extra requests:
+
+- **Shared-cache exposure candidate:** flags HTTP 200 responses on sensitive-looking account, profile, billing, order, session, export, or administrative paths when Cache-Control includes `public` or `s-maxage` without `private` or `no-store`. This is a candidate only; actual impact depends on whether the response contains user-specific material and how the CDN/cache keys requests.
+- **CORS cache variation:** flags a concrete `Access-Control-Allow-Origin` response that omits `Vary: Origin`. This matters when the server dynamically selects an allowed origin; a static single-origin policy may not require it.
+
+The checks intentionally do not flag public caching on ordinary public routes, and they accept `Vary: Origin` case-insensitively. They analyze headers from responses already fetched within the existing scope and request budget. They do not probe other origins, attempt cache poisoning, or retrieve another user's data.
