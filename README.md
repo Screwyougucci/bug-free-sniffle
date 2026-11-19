@@ -482,3 +482,10 @@ This pass is intentionally bounded and conservative. It does not execute code, r
 The project-level source review now builds bounded function summaries for JavaScript, TypeScript, PHP, Java, and Go. It looks for request-derived values passed into uniquely-resolved helper functions whose parameters reach database, outbound-request, filesystem, process, template, or deserialization operations. It also follows straightforward helper return flows and conservatively retains taint across branch assignments.
 
 This is lexical, path-insensitive analysis—not a full parser, compiler dataflow engine, or proof of exploitability. It intentionally avoids guessing when helper names are ambiguous. Complex syntax, nested functions, callbacks, dynamic dispatch, imports, aliases, and sanitizers may be missed or misread. Findings remain low-confidence review candidates and require manual validation. No source is executed and no network traffic is generated.
+
+
+## Version 2.4.0 — Object-property dataflow
+
+The cross-function source review now tracks request-derived values assigned to object properties and indexed fields before those objects are passed to uniquely-resolved helper functions. It conservatively retains taint at the containing object across branch joins, reducing misses when one branch populates a field and a later call passes the object.
+
+This remains bounded lexical analysis. It does not fully model object aliasing, destructuring, nested property paths, dynamic keys, interprocedural object mutation, or language-specific control-flow semantics. A candidate is not proof that an attacker can control the value at runtime. Review the full source path and sanitization before treating any result as a vulnerability.
