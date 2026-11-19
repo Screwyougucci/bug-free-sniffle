@@ -22,6 +22,7 @@ from .http_client import SafeHttpClient
 from .method_checks import inspect_http_methods
 from .report import write_report
 from .response_audit import inspect_response_behavior
+from .server_side_audit import inspect_server_response, inspect_server_fuzz_observations
 from .scope import ScopeError, load_scope, require_authorization
 from .polyglot_audit import audit_source
 from .tls_checks import inspect_tls
@@ -220,9 +221,13 @@ def main(argv: list[str] | None = None) -> int:
                 for response in responses
             ]
             fuzz_data = observations_to_dict(observations)
+            server_findings = []
+            for response in responses:
+                server_findings.extend(inspect_server_response(response))
+            server_findings.extend(inspect_server_fuzz_observations(fuzz_data))
             report = _write_bundle(
                 args, target=args.target, requests_made=client.requests_made,
-                pages=pages, findings=[],
+                pages=pages, findings=server_findings,
                 fuzz_observations=fuzz_data,
             )
             # Preserve the ordinary scanner report while adding auditable reproduction
