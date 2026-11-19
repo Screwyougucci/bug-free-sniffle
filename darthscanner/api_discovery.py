@@ -7,6 +7,7 @@ import xml.etree.ElementTree as ET
 from urllib.parse import urljoin, urlsplit
 
 from .http_client import SafeHttpClient
+from .api_schema_audit import inspect_openapi_schema
 from .scope import Scope
 
 
@@ -50,6 +51,7 @@ def discover_api_resources(base_url: str, scope: Scope, client: SafeHttpClient,
     endpoints: dict[str, dict] = {}
     sitemap_urls: set[str] = set()
     robots_sitemaps: set[str] = set()
+    schema_findings: list[dict] = []
 
     candidates = [urljoin(root, path) for path in _CANDIDATES[:max_resources]]
     for url in candidates:
@@ -88,6 +90,7 @@ def discover_api_resources(base_url: str, scope: Scope, client: SafeHttpClient,
                 continue
             if not isinstance(spec, dict):
                 continue
+            schema_findings.extend(item.to_dict() for item in inspect_openapi_schema(spec, response.url))
             paths = spec.get("paths", {})
             if isinstance(paths, dict):
                 for api_path, operations in paths.items():
@@ -117,5 +120,6 @@ def discover_api_resources(base_url: str, scope: Scope, client: SafeHttpClient,
         "api_endpoints": sorted(endpoints.values(), key=lambda item: item["path"]),
         "sitemap_urls_discovered": sorted(sitemap_urls),
         "robots_sitemaps_discovered": sorted(robots_sitemaps),
+        "schema_findings": schema_findings,
         "note": "Discovered URLs and API methods are inventory only; no API operations were invoked."
     }
