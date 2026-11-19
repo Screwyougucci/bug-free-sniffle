@@ -414,3 +414,18 @@ The standard `scan` command now reserves a small part of its existing request bu
 When an OpenAPI/Swagger JSON document is publicly available, Darth Scanner inventories documented paths and HTTP methods. It also extracts same-origin sitemap URLs and same-origin Sitemap directives from robots.txt. The JSON report includes an `api_inventory` section and coverage counts; the local HTML dashboard shows API path and metadata-resource totals.
 
 **Important limits:** this is passive inventory, not API exploitation. The scanner never invokes operations listed in an API schema, never follows external sitemap links, and never expands discovered paths into additional requests. All metadata requests are same-origin and count against the existing per-scan request budget. The crawler reserves capacity for metadata discovery and the existing exposure/method checks, so the number of HTML pages may be slightly lower on scans with a tight request budget. If the budget is already consumed, API discovery is skipped and the report explains why.
+
+
+## Version 1.7.0 — subtle API schema weakness review
+
+Darth Scanner now reviews any OpenAPI document it already discovers, without invoking documented API operations. It looks for small but security-relevant specification details:
+
+- Sensitive-looking routes (such as account, user, billing, role, token, export, and admin paths) that have no effective OpenAPI security requirement.
+- Operations that explicitly set an empty security list and therefore override inherited global security.
+- API keys documented in query parameters, where credentials can leak into browser history, referrers, and logs.
+- Plaintext HTTP server URLs in the API specification.
+- HTTP Basic authentication declarations that deserve transport and credential-lifecycle review.
+
+These are intentionally conservative schema-review candidates. A missing OpenAPI security declaration does **not** prove the live endpoint is unauthenticated; gateways or application middleware may enforce access controls outside the schema. A sensitive-looking path may also be intentionally public. Verify with the service owner and approved test accounts before classifying a finding as a vulnerability.
+
+The review is passive, adds no network requests, does not send payloads, and does not call API operations. It analyzes only metadata already fetched within the existing same-origin request budget. Reports include the exact documented method/path and remediation guidance, but never API key values.
