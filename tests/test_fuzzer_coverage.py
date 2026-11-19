@@ -1,6 +1,6 @@
 import unittest
 
-from darthscanner.fuzzer import normalized_body_hash, run_fuzz
+from darthscanner.fuzzer import normalized_body_hash, replay_case, run_fuzz
 from darthscanner.scope import Scope
 from darthscanner.http_client import HttpResponse
 
@@ -28,6 +28,25 @@ class FuzzerCoverageTests(unittest.TestCase):
             normalized_body_hash(b'{"result":"alpha"}'),
             normalized_body_hash(b'{"result":"beta"}'),
         )
+
+    def test_replay_repeats_one_named_benign_case(self):
+        scope = Scope(True, ("owned.example",), max_requests=1)
+        client = FakeClient([
+            HttpResponse("https://owned.example/search?q=0", 200,
+                         {"content-type": "application/json"}, b'{"ok":true}', 0.1)
+        ])
+        item = replay_case(
+            "https://owned.example/search?q=x", "q", "zero", scope, client
+        )
+        self.assertEqual(item["case"], "zero")
+        self.assertEqual(item["mutation_value"], "0")
+        self.assertEqual(client.requests_made, 1)
+
+    def test_unknown_replay_case_is_rejected(self):
+        scope = Scope(True, ("owned.example",), max_requests=1)
+        client = FakeClient([])
+        with self.assertRaises(ValueError):
+            replay_case("https://owned.example/search?q=x", "q", "unknown", scope, client)
 
     def test_anomaly_score_and_replay_fields_are_recorded(self):
         scope = Scope(True, ("owned.example",), max_requests=10)
