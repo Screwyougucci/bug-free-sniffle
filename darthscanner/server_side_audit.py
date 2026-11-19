@@ -6,26 +6,25 @@ Findings are indicators for manual verification, not proof of exploitability.
 from __future__ import annotations
 
 import re
-from urllib.parse import urlsplit
 
 from .checks import Finding
 
 
 _RULES = (
     ("database-error", "Database error details exposed", "medium", "CWE-209",
-     re.compile(r"(?:SQLSTATE\\[[0-9A-Z]+\\]|you have an error in your sql syntax|\\b(?:sqlite|postgresql|mysql|mariadb|odbc)\\b.{0,60}\\b(?:syntax error|exception|error)\\b|\\b(?:psycopg2|PDOException|mysqli_sql_exception)\\b", re.I),
+     re.compile(r"(?:SQLSTATE\[[0-9A-Z]+\]|you have an error in your sql syntax|\b(?:sqlite|postgresql|mysql|mariadb|odbc)\b.{0,60}\b(?:syntax error|exception|error)\b|\b(?:psycopg2|PDOException|mysqli_sql_exception)\b)", re.I),
      "Database diagnostics can disclose schema, query, driver, or implementation details.",
      "Return generic client errors; keep database diagnostics in access-controlled server logs."),
     ("stack-trace", "Server-side stack trace exposed", "medium", "CWE-209",
-     re.compile(r"(?:Traceback \\(most recent call last\\)|\\b(?:NullPointerException|ClassNotFoundException|\\w+Exception)\\b.{0,160}\\bat\\s+[\\w.$]+\\([^)]*:\\d+\\)|\\bat\\s+\/[^\\s:]+\\.(?:php|py|rb|java|js):\\d+)", re.I),
+     re.compile(r"(?:Traceback \(most recent call last\)|\b(?:NullPointerException|ClassNotFoundException|\w+Exception)\b.{0,160}\bat\s+[\w.$]+\([^)]*:\d+\)|\bat\s+/[^\s:]+\.(?:php|py|rb|java|js):\d+)", re.I),
      "Stack traces can disclose internal paths, component names, and execution details.",
      "Disable detailed error pages in production and log diagnostics privately."),
     ("template-error", "Server-side template diagnostic exposed", "low", "CWE-209",
-     re.compile(r"(?:TemplateSyntaxError|TemplateNotFound|UndefinedError:|\\bTwig\\\\Error\\\\|\\bJinja2?\\b.{0,80}(?:template|undefined)|\\bFreeMarker template error\\b|\\bThymeleaf\\b.{0,80}exception)", re.I),
+     re.compile(r"(?:TemplateSyntaxError|TemplateNotFound|UndefinedError:|\bTwig\\Error\\|\bJinja2?\b.{0,80}(?:template|undefined)|\bFreeMarker template error\b|\bThymeleaf\b.{0,80}exception)", re.I),
      "Template diagnostics may reveal template names, engine details, or unsafe rendering paths.",
      "Return generic rendering errors and keep template diagnostics in protected logs."),
     ("local-path", "Internal filesystem path disclosed", "low", "CWE-200",
-     re.compile(r"(?:File \"/(?:var|srv|opt|home|app|usr/local)/[^\"\\n]{1,180}\"|\\b[A-Z]:\\\\(?:inetpub|wwwroot|app|users)\\\\[^\\r\\n]{1,180})", re.I),
+     re.compile(r'(?:File "/(?:var|srv|opt|home|app|usr/local)/[^"\n]{1,180}"|\b[A-Z]:\\(?:inetpub|wwwroot|app|users)\\[^\r\n]{1,180})', re.I),
      "An absolute server path reveals deployment layout and may aid follow-on attacks.",
      "Avoid returning absolute paths in client-visible errors."),
 )
@@ -41,7 +40,7 @@ def inspect_server_response(response) -> list[Finding]:
         match = pattern.search(body)
         if not match:
             continue
-        snippet = re.sub(r"\\s+", " ", match.group(0))[:180]
+        snippet = re.sub(r"\s+", " ", match.group(0))[:180]
         findings.append(Finding(
             category="server-side",
             title=title,
