@@ -40,12 +40,25 @@ def _clean(line: str, language: str) -> str:
         return ""
     return line
 
-def _params(raw: str) -> list[str]:
+def _params(raw: str, language: str) -> list[str]:
     result = []
     for part in raw.split(","):
-        names = _IDENT.findall(part.strip().split("=")[0])
-        if names:
-            result.append(names[-1])
+        part = part.strip().split("=")[0].strip()
+        if not part:
+            continue
+        if language == "go":
+            names = _IDENT.findall(part)
+            name = names[0] if names else ""
+        elif language == "js" and ":" in part:
+            name = part.split(":", 1)[0].strip()
+        elif language == "php":
+            names = _IDENT.findall(part)
+            name = names[-1] if names else ""
+        else:
+            names = _IDENT.findall(part)
+            name = names[-1] if names else ""
+        if name:
+            result.append(name)
     return result
 
 def _functions(lines: list[str], language: str) -> list[dict]:
@@ -72,7 +85,7 @@ def _functions(lines: list[str], language: str) -> list[dict]:
             depth += lines[index].count("{") - lines[index].count("}")
             index += 1
         if depth <= 0:
-            result.append({"name": name, "params": _params(raw_params), "start": start + 1, "body": body})
+            result.append({"name": name, "params": _params(raw_params, language), "start": start + 1, "body": body})
     return result
 
 def _summarize(fn: dict, language: str) -> tuple[dict[str, set[int]], set[int]]:
