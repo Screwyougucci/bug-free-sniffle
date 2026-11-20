@@ -28,6 +28,7 @@ from .polyglot_audit import audit_source
 from .tls_checks import inspect_tls
 from .watch import run_watch
 from .sigma_audit import audit_log_file
+from .metadata_discovery import discover_api_resources
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -120,7 +121,8 @@ def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
                   findings: list, software: list[dict] | None = None,
                   fuzz_observations: list[dict] | None = None,
                   exposure_paths_checked: int = 0, tls_probes: int = 0,
-                  source_files_reviewed: int = 0, source_files_skipped: int = 0) -> dict:
+                  source_files_reviewed: int = 0, source_files_skipped: int = 0,
+                  api_inventory: dict | None = None) -> dict:
     """Write the single Notepad-friendly JSON report."""
     return write_report(
         args.output,
@@ -134,6 +136,7 @@ def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
         tls_probes=tls_probes,
         source_files_reviewed=source_files_reviewed,
         source_files_skipped=source_files_skipped,
+        api_inventory=api_inventory,
     )
 
 def main(argv: list[str] | None = None) -> int:
@@ -341,7 +344,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "scan":
             scope.validate_url(args.target)
             client = SafeHttpClient(scope)
-            responses = crawl(args.target, scope, client)
+            scan_scope = replace(scope, max_pages=min(scope.max_pages, max(1, scope.max_requests - 27)))
+            responses = crawl(args.target, scan_scope, client)
+            api_budget = min(7, max(0, client.max_requests - client.requests_made - 20))
+            api_inventory = (discover_api_resources(args.target, scope, client, max_resources=api_budget)
+                             if api_budget else {"resources": [], "api_endpoints": [],
+                                                 "sitemap_urls_discovered": [],
+                                                 "robots_sitemaps_discovered": [],
+                                                 "note": "Skipped: request budget reserve preserved."})
             findings = []
             components_by_cpe = {}
             script_urls = []
@@ -416,10 +426,12 @@ def main(argv: list[str] | None = None) -> int:
                 args, target=args.target, requests_made=client.requests_made,
                 pages=pages, findings=findings, software=software,
                 exposure_paths_checked=exposure_paths_checked, tls_probes=tls_probes,
+                api_inventory=api_inventory,
             )
             print(f"Scanned {len(responses)} HTML page(s) and statically reviewed {len(script_responses)} same-origin JavaScript file(s); {client.requests_made} HTTP request(s).")
             print(f"Exposure paths checked: {exposure_paths_checked}; TLS probes attempted: {tls_probes}.")
             print(f"Software fingerprints: {len(components)}")
+            print(f"API paths inventoried: {len(api_inventory.get('api_endpoints', []))}; metadata resources checked: {len(api_inventory.get('resources', []))}.")
             _print_finding_summary(findings)
             print(f"JSON: {args.output}")
             return 0
