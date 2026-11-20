@@ -85,6 +85,8 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
     pages: list[dict] = []
     requests: dict[tuple[str, str, str], dict] = {}
     blocked_cross_origin = 0
+    requests_made = 0
+    request_budget_exhausted = False
     errors: list[dict] = []
 
     with sync_playwright() as playwright:
@@ -94,7 +96,7 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
         page.set_default_timeout(timeout_ms)
 
         def guard(route):
-            nonlocal blocked_cross_origin
+            nonlocal blocked_cross_origin, requests_made, request_budget_exhausted
             request_url = route.request.url
             try:
                 scope.validate_url(request_url)
@@ -104,7 +106,11 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
             if not allowed:
                 blocked_cross_origin += 1
                 route.abort()
+            elif requests_made >= scope.max_requests:
+                request_budget_exhausted = True
+                route.abort()
             else:
+                requests_made += 1
                 route.continue_()
 
         page.route("**/*", guard)
@@ -131,7 +137,7 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
 
         page.on("request", observe)
         try:
-            while queue and len(visited) < max_pages:
+            while queue and len(visited) < max_pages and not request_budget_exhausted:
                 current = queue.popleft()
                 if current in visited:
                     continue
@@ -182,6 +188,8 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
         "page_count": len(pages),
         "network_requests": list(requests.values()),
         "network_request_count": len(requests),
+        "requests_made": requests_made,
+        "request_budget_exhausted": request_budget_exhausted,
         "blocked_cross_origin_requests": blocked_cross_origin,
         "navigation_errors": errors,
         "limits": {"max_pages": max_pages, "timeout_ms": timeout_ms},
