@@ -4,6 +4,34 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
+## Version 3.3.0 capabilities
+
+### Browser-rendered application discovery
+
+The optional `browser-scan` command uses Playwright Chromium to render JavaScript-driven pages and inventory the application after client-side rendering:
+- Discovers rendered same-origin links and follows them within a page cap.
+- Inventories dynamically created forms and controls using metadata only.
+- Observes same-origin network request method, resource type, endpoint path, and non-sensitive query parameter names.
+- Blocks cross-origin browser requests and does not follow navigation outside the authorized origin.
+- Redacts query values and fragments; never records request/response bodies, headers, cookies, authorization values, or form values.
+- Never clicks controls, submits forms, or replays discovered requests.
+
+Install the optional browser extra and Chromium once:
+
+```powershell
+python -m pip install -e ".[browser]"
+python -m playwright install chromium
+```
+
+Run it only against an application you are authorized to assess:
+
+```powershell
+darth-scanner browser-scan --target "https://your-authorized-host.example/" --scope ".\\scope.json" --acknowledge-authorization --max-pages 12 --output ".\\darth-browser-report.json"
+notepad .\\darth-browser-report.json
+```
+
+Browser discovery is a separate command so existing lightweight scans do not require a browser install. It does not reuse authenticated browser sessions or accept passwords/session-state files in this release. JavaScript execution occurs only as normal page rendering in an isolated, headless browser; cross-origin requests are blocked by the adapter. The page cap, navigation timeout, and exact-host scope still apply.
+
 ## Version 3.2.0 capabilities
 
 ### 1. Coverage-guided route and parameter research
