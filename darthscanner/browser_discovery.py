@@ -84,7 +84,9 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
     visited: set[str] = set()
     pages: list[dict] = []
     requests: dict[tuple[str, str, str], dict] = {}
-    request_index: dict[int, dict] = {}
+    request_index: dict[tuple[str, str, str], dict] = {}
+    navigation_edges: dict[tuple[str, str], dict] = {}
+    last_frame_urls: dict[int, str] = {}
     link_edges: dict[tuple[str, str], dict] = {}
     blocked_cross_origin = 0
     requests_made = 0
@@ -145,10 +147,12 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
             item = requests.get(key)
             if item is not None and initiator and initiator not in item["observed_from_pages"]:
                 item["observed_from_pages"].append(initiator)
-            request_index[id(request)] = item if item is not None else {}
+            request_index[key] = item if item is not None else {}
 
         def observe_response(response):
-            item = request_index.get(id(response.request))
+            req = response.request
+            signature = (req.method.upper(), _safe_url(req.url), req.resource_type)
+            item = request_index.get(signature)
             if not item:
                 return
             status = response.status
@@ -163,6 +167,24 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
 
         page.on("request", observe)
         page.on("response", observe_response)
+        def observe_frame_navigation(frame):
+            if frame != page.main_frame:
+                return
+            current_url = frame.url
+            if not _same_origin(target, current_url):
+                return
+            safe_current = _safe_url(current_url)
+            previous = last_frame_urls.get(id(frame))
+            if previous and previous != safe_current:
+                navigation_edges.setdefault(
+                    (previous, safe_current),
+                    {"source_route": previous, "destination_route": safe_current,
+                     "relationship": "client-or-document-navigation"},
+                )
+            last_frame_urls[id(frame)] = safe_current
+
+        page.on("framenavigated", observe_frame_navigation)
+
         try:
             while queue and len(visited) < max_pages and not request_budget_exhausted:
                 current = queue.popleft()
@@ -220,7 +242,8 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
         "network_request_count": len(requests),
         "api_relationships": [item for item in requests.values() if item.get("resource_type") in {"xhr", "fetch", "websocket"}],
         "page_link_relationships": list(link_edges.values()),
-        "relationship_counts": {"api_requests": sum(1 for item in requests.values() if item.get("resource_type") in {"xhr", "fetch", "websocket"}), "page_links": len(link_edges)},
+        "navigation_relationships": list(navigation_edges.values()),
+        "relationship_counts": {"api_requests": sum(1 for item in requests.values() if item.get("resource_type") in {"xhr", "fetch", "websocket"}), "page_links": len(link_edges), "navigations": len(navigation_edges)},
         "requests_made": requests_made,
         "request_budget_exhausted": request_budget_exhausted,
         "blocked_cross_origin_requests": blocked_cross_origin,
