@@ -105,7 +105,7 @@ def _mask_strings(source: str) -> str:
                 escaped = True
             elif ch == quote:
                 quote = None
-        elif ch in ("'", '"', "\`"):
+        elif ch in ("'", '"', "`"):
             quote = ch
             out[index] = " "
     return "".join(out)
