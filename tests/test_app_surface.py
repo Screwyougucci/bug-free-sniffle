@@ -1,6 +1,8 @@
 import unittest
 
 from darthscanner.app_surface import inspect_app_surface
+from darthscanner.checks import Finding
+from darthscanner.report import build_report
 
 
 class AppSurfaceInventoryTests(unittest.TestCase):
@@ -34,6 +36,15 @@ class AppSurfaceInventoryTests(unittest.TestCase):
         self.assertFalse(form["same_origin_action"])
         self.assertNotIn("token=secret", str(result))
 
+    def test_rejects_form_action_with_embedded_credentials(self):
+        result = inspect_app_surface(
+            "https://example.test/",
+            '<form action="https://user:pass@outside.test/submit"><input name="q"></form>',
+        )
+        self.assertIsNone(result["forms"][0]["action"])
+        self.assertIsNone(result["forms"][0]["same_origin_action"])
+        self.assertNotIn("user:pass", str(result))
+
     def test_detects_framework_hints(self):
         html = '<div id="__next"></div><script id="__NEXT_DATA__"></script><div data-reactroot></div>'
         result = inspect_app_surface("https://example.test/", html)
@@ -47,6 +58,15 @@ class AppSurfaceInventoryTests(unittest.TestCase):
         )
         self.assertEqual(result["controls_outside_forms"], 1)
         self.assertEqual(result["forms"][0]["controls"][0]["tag"], "textarea")
+
+    def test_report_includes_application_surface_coverage(self):
+        finding = Finding("test", "test", "info", "low", "https://example.test/", "evidence", "fix")
+        report = build_report(
+            target="https://example.test/", requests_made=1, pages=[], findings=[finding],
+            api_inventory={"form_count": 3, "framework_hints": ["React", "Next.js"]},
+        )
+        self.assertEqual(report["coverage"]["forms_discovered"], 3)
+        self.assertEqual(report["coverage"]["framework_hints_detected"], 2)
 
     def test_rejects_non_http_page_url(self):
         with self.assertRaises(ValueError):
