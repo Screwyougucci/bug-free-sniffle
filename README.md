@@ -4,7 +4,7 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 3.1.0 capabilities
+## Version 3.2.0 capabilities
 
 ### 1. Coverage-guided route and parameter research
 
@@ -375,3 +375,19 @@ Cross-function review also tracks simple object-property and indexed-field assig
 During `scan` and `research`, the scanner now indexes literal same-origin GET endpoints found in fetched JavaScript, including queryless routes used by single-page applications. It recognizes simple `fetch(url)`, `axios.get(url)`, and explicit XHR `open('GET', url)` calls. Reports include the endpoint path, parameter names, source script, client API, and source line. Query values are omitted from this inventory to avoid copying potentially sensitive values into reports.
 
 This is static discovery only: JavaScript is not executed, dynamic URL construction and framework-generated routes are not resolved, and discovered endpoints are not automatically requested. Query-bearing candidates continue through the existing bounded, benign GET research path only when they satisfy the configured exact-host scope and request budget. Route inventory is not proof that an endpoint is reachable or vulnerable.
+
+### 10. Application surface inventory (3.2)
+
+The scanner now passively inventories HTML forms and interactive controls on crawled pages. Reports include each form's action path, method, same-origin status, encoding type, and control metadata such as input type, name, required state, autocomplete, and maximum length. It also records heuristic framework hints for Next.js, Nuxt, React, Vue, Angular, Svelte, Astro, and Blazor.
+
+**Safety and privacy:** form fields are never submitted; form actions are never requested; control values, placeholders, and query-string values are not retained. External form actions are identified but not followed. Framework labels are hints based on delivered HTML, not verified package dependencies. Forms rendered only after JavaScript execution are not visible to this passive HTML parser.
+
+### 11. Continuous monitoring
+
+The `watch` command repeatedly runs the bounded website scan until you stop it. By default, `--max-cycles 0` means unlimited cycles for that run. The minimum interval is 60 seconds. Press **Ctrl+C** to stop cleanly; the watch state is saved and can be resumed by running the same command again.
+
+```powershell
+darth-scanner watch --target "https://your-authorized-host.example/" --scope ".\scope.json" --acknowledge-authorization --interval-seconds 300 --max-cycles 0 --output ".\darth-watch-report.json" --state ".\darth-watch-state.json"
+```
+
+Each cycle is individually bounded by the authorization scope's page and request limits. Watch mode reports newly observed stable finding IDs and maintains a cumulative JSON report. It does not run unlimited requests within a single cycle, submit forms, or automatically exploit findings. Use an interval appropriate for the application and its operators.
