@@ -266,10 +266,23 @@ def main(argv: list[str] | None = None) -> int:
                  "error": response.error, "resource_type": "javascript-static-review"}
                 for response in script_responses
             )
-            _write_bundle(
+            fuzz_data = observations_to_dict(observations)
+            report = _write_bundle(
                 args, target=args.target, requests_made=client.requests_made,
-                pages=pages, findings=[],
-                fuzz_observations=observations_to_dict(observations),
+                pages=pages, findings=[], fuzz_observations=fuzz_data,
+            )
+            # Add reproducible, redacted evidence without overstating black-box findings.
+            from .evidence import build_reproduction_evidence
+            import json
+            from pathlib import Path
+            report["reproduction_evidence"] = build_reproduction_evidence(fuzz_data)
+            report["authorization_scope"] = {
+                "allowed_hosts": list(scope.allowed_hosts),
+                "host_matching": "exact hostname; subdomains require explicit entries",
+                "authorized": scope.authorized,
+            }
+            Path(args.output).write_text(
+                json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
             )
             anomaly_count = sum(item.anomaly_score >= 20 for item in observations)
             print(f"Discovered {len(targets)} same-origin query URL(s) across {len(responses)} crawled page(s) and {len(script_responses)} static JavaScript file(s); {len(api_targets)} API route candidate(s) came from literal GET calls.")
