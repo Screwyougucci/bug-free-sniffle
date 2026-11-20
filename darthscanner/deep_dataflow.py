@@ -123,6 +123,7 @@ def enrich_python_dataflow(
         )
         function_nodes[(module, name)] = (return_id, parameter_ids)
 
+        property_nodes: dict[str, str] = {}
         for statement in ast.walk(function):
             if isinstance(statement, ast.Return) and statement.value is not None:
                 for loaded in _loaded_names(statement.value):

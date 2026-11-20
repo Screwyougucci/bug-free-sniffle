@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .analysis_graph import AnalysisGraph, build_python_graph
 from .deep_dataflow import enrich_python_dataflow
+from .js_ts_dataflow import enrich_js_ts_dataflow
 from .multilang_taint import _ASSIGN, _IDENT, _LANGUAGES, _SINKS, _SOURCES
 from .source_audit import MAX_FILE_BYTES, SKIP_DIRS
 
@@ -156,6 +157,8 @@ def build_project_graph(
             continue
         relative = item.relative_to(base_path).as_posix()
         add_multilang_file_to_graph(item, graph, display_path=relative)
+        if item.suffix.lower() in {".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"}:
+            enrich_js_ts_dataflow(item, graph, display_path=relative)
 
     if python_paths:
         enrich_python_dataflow(
