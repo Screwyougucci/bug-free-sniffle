@@ -44,7 +44,7 @@ class SafeHttpClient:
         self._last_request_at = 0.0
         self._opener = build_opener(_NoRedirect())
 
-    def request(self, url: str, method: str = "GET") -> HttpResponse:
+    def request(self, url: str, method: str = "GET", headers: dict[str, str] | None = None) -> HttpResponse:
         method = method.upper()
         if method not in {"GET", "HEAD", "OPTIONS"}:
             raise ValueError("Only GET, HEAD, and OPTIONS are supported by the scanner.")
@@ -61,6 +61,7 @@ class SafeHttpClient:
             headers={
                 "User-Agent": "BugFreeSniffle/0.3 (+authorized-security-assessment)",
                 "Accept": "text/html,application/json,text/plain;q=0.9,*/*;q=0.5",
+                **{str(k): str(v) for k, v in (headers or {}).items()},
             },
             method=method,
         )
@@ -91,8 +92,8 @@ class SafeHttpClient:
         except (URLError, TimeoutError, OSError) as exc:
             return HttpResponse(url, None, {}, b"", time.monotonic() - started, str(exc))
 
-    def get(self, url: str) -> HttpResponse:
-        return self.request(url, "GET")
+    def get(self, url: str, headers: dict[str, str] | None = None) -> HttpResponse:
+        return self.request(url, "GET", headers=headers)
 
     def head(self, url: str) -> HttpResponse:
         return self.request(url, "HEAD")
