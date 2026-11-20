@@ -91,6 +91,8 @@ def run_watch(*, target: str, scope: str, acknowledged: bool, interval: int,
                         finding["last_seen_cycle"] = cycle_number
                         finding["occurrences"] = int(previous.get("occurrences", 0)) + 1
                         finding["lifecycle_status"] = "active"
+                        if was_resolved:
+                            finding.pop("resolved_at", None)
                         known[finding_id] = finding
                         if finding_id not in seen:
                             new_items.append(finding)
