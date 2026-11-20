@@ -4,7 +4,7 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 1.0.0 capabilities
+## Version 3.1.0 capabilities
 
 ### 1. Coverage-guided route and parameter research
 
@@ -369,3 +369,9 @@ Project-level source review adds bounded helper summaries for JavaScript, TypeSc
 ## Version 2.4.0 — object-property dataflow
 
 Cross-function review also tracks simple object-property and indexed-field assignments before those objects are passed to uniquely resolved helpers. It conservatively retains object taint across branch assignments. Complex object aliasing, destructuring, dynamic keys, nested property paths, and runtime reachability remain outside its model.
+
+### JavaScript SPA/API route inventory (3.1)
+
+During `scan` and `research`, the scanner now indexes literal same-origin GET endpoints found in fetched JavaScript, including queryless routes used by single-page applications. It recognizes simple `fetch(url)`, `axios.get(url)`, and explicit XHR `open('GET', url)` calls. Reports include the endpoint path, parameter names, source script, client API, and source line. Query values are omitted from this inventory to avoid copying potentially sensitive values into reports.
+
+This is static discovery only: JavaScript is not executed, dynamic URL construction and framework-generated routes are not resolved, and discovered endpoints are not automatically requested. Query-bearing candidates continue through the existing bounded, benign GET research path only when they satisfy the configured exact-host scope and request budget. Route inventory is not proof that an endpoint is reachable or vulnerable.

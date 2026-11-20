@@ -14,6 +14,7 @@ from .js_research import extract_same_origin_script_urls, inspect_javascript_sou
 from .crawler import crawl
 from .discovery import discover_query_targets
 from .api_discovery import discover_static_get_targets
+from .js_route_discovery import discover_static_get_routes
 from .cve import load_inventory, load_nvd_feed, match_cves
 from .exposure import probe_sensitive_paths
 from .fingerprint import fingerprint_response
@@ -239,6 +240,7 @@ def main(argv: list[str] | None = None) -> int:
             seen_scripts = set()
             script_budget = min(8, max(0, client.max_requests - client.requests_made - 4))
             api_targets = []
+            javascript_routes = []
             for script_url in script_urls:
                 if len(script_responses) >= script_budget:
                     break
@@ -256,6 +258,10 @@ def main(argv: list[str] | None = None) -> int:
                 if "javascript" not in content_type and not urlsplit(script_url).path.lower().endswith((".js", ".mjs", ".cjs")):
                     continue
                 script_responses.append(script_response)
+                javascript_routes.extend(discover_static_get_routes(
+                    script_url, script_response.text, scope,
+                    max_routes=max(1, min(100, args.max_targets)),
+                ))
                 api_targets.extend(discover_static_get_targets(
                     script_url, script_response.text, scope,
                     max_targets=max(1, args.max_targets - len(targets)),
@@ -319,6 +325,11 @@ def main(argv: list[str] | None = None) -> int:
             report = _write_bundle(
                 args, target=args.target, requests_made=client.requests_made,
                 pages=pages, findings=server_findings, fuzz_observations=fuzz_data,
+                api_inventory={
+                    "javascript_routes": javascript_routes,
+                    "javascript_route_count": len(javascript_routes),
+                    "note": "Literal same-origin GET routes extracted from fetched JavaScript; routes are inventory only and are not requested.",
+                },
             )
             # Add reproducible, redacted evidence without overstating black-box findings.
             from .evidence import build_reproduction_evidence
@@ -334,7 +345,7 @@ def main(argv: list[str] | None = None) -> int:
                 json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
             )
             anomaly_count = sum(item.anomaly_score >= 20 for item in observations)
-            print(f"Discovered {len(targets)} same-origin query URL(s) across {len(responses)} crawled page(s) and {len(script_responses)} static JavaScript file(s); {len(api_targets)} API route candidate(s) came from literal GET calls.")
+            print(f"Discovered {len(targets)} same-origin query URL(s) across {len(responses)} crawled page(s) and {len(script_responses)} static JavaScript file(s); {len(api_targets)} query-bearing API candidate(s) and {len(javascript_routes)} total JavaScript GET route(s) inventoried.")
             print(f"Coverage-guided tests: {mutations} benign mutations across {len({item.endpoint_url for item in observations})} endpoint(s) and {len({(item.endpoint_url, item.parameter) for item in observations})} parameter(s).")
             print(f"High-priority anomaly signals (score >= 20): {anomaly_count}; total HTTP requests: {client.requests_made}.")
             print("Scores prioritize unusual behavior; they are not vulnerability probabilities or proof of exploitability.")
@@ -356,6 +367,7 @@ def main(argv: list[str] | None = None) -> int:
                          for item in api_inventory.get('schema_findings', [])]
             components_by_cpe = {}
             script_urls = []
+            javascript_routes = []
             for response in responses:
                 findings.extend(inspect_http(response))
                 findings.extend(inspect_html(response))
@@ -386,6 +398,9 @@ def main(argv: list[str] | None = None) -> int:
                 if "javascript" not in content_type and not urlsplit(script_url).path.lower().endswith((".js", ".mjs")):
                     continue
                 script_responses.append(script_response)
+                javascript_routes.extend(discover_static_get_routes(
+                    script_url, script_response.text, scope, max_routes=100
+                ))
                 findings.extend(inspect_javascript_source(script_url, script_response.text))
                 findings.extend(inspect_server_response(script_response))
 
@@ -404,6 +419,13 @@ def main(argv: list[str] | None = None) -> int:
                 for component in load_inventory(args.inventory):
                     components_by_cpe[component.cpe] = component
             components = list(components_by_cpe.values())
+
+            api_inventory["javascript_routes"] = javascript_routes
+            api_inventory["javascript_route_count"] = len(javascript_routes)
+            api_inventory["javascript_route_note"] = (
+                "Literal same-origin GET routes extracted from fetched JavaScript. "
+                "Routes are inventory only; no additional requests are sent to them."
+            )
 
             if args.nvd_json:
                 feed = load_nvd_feed(args.nvd_json)
