@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "darth-scanner"
-version = "3.3.0"
-description = "Scoped web/server security scanner with website form/input inventory, framework hints, SPA route discovery, and multi-language source analysis"
+version = "3.4.0"
+description = "Scoped web/server security scanner with browser-based application mapping, API relationships, website inventory, and multi-language source analysis"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
