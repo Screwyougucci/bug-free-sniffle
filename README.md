@@ -419,3 +419,22 @@ darth-scanner watch --target "https://your-authorized-host.example/" --scope ".\
 ```
 
 Each cycle is individually bounded by the authorization scope's page and request limits. Watch mode reports newly observed stable finding IDs and maintains a cumulative JSON report. It does not run unlimited requests within a single cycle, submit forms, or automatically exploit findings. Use an interval appropriate for the application and its operators.
+
+
+## Version 3.5.0 — Long-term monitoring
+
+Watch mode now maintains a durable finding lifecycle across repeated scans:
+- Records first-seen/last-seen timestamps and cycle numbers, plus repeat occurrence counts.
+- Marks findings absent from the latest successful scan as **resolved from observation**; this is not proof the issue was fixed.
+- Detects findings that reappear after being absent and prints a dedicated alert.
+- Tracks successful and failed scan cycles in a bounded 500-entry timeline.
+- Writes state and cumulative reports with atomic file replacement to reduce corruption risk if interrupted.
+- Resumes prior state for the same target and refuses to reuse a state file for a different target.
+
+Run indefinitely (Ctrl+C stops cleanly and saves state):
+
+```powershell
+darth-scanner watch --target "https://your-authorized-host.example/" --scope ".\\scope.json" --acknowledge-authorization --interval-seconds 300 --output ".\\darth-watch-report.json" --state ".\\darth-watch-state.json"
+```
+
+A finding marked resolved means only that it was not present in the latest successful scan. It may be temporarily hidden, intermittent, or outside current coverage. Watch mode repeats the ordinary bounded scan; it does not run exploit payloads, submit forms, or bypass scope limits.
