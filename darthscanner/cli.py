@@ -31,6 +31,7 @@ from .tls_checks import inspect_tls
 from .watch import run_watch
 from .sigma_audit import audit_log_file
 from .metadata_discovery import discover_api_resources
+from .browser_discovery import browser_discover
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -48,6 +49,14 @@ def _parser() -> argparse.ArgumentParser:
     scan.add_argument("--nvd-json", help="optional local NVD 2.0 JSON feed for CVE matching")
     scan.add_argument("--inventory", help="optional CPE inventory JSON to add to discovered software")
     scan.add_argument("--output", default="darth-report.json", help="JSON report output")
+
+    browser_scan = commands.add_parser("browser-scan", help="render an authorized web app and inventory dynamic routes, forms, and same-origin requests")
+    browser_scan.add_argument("--target", required=True)
+    browser_scan.add_argument("--scope", default="scope.json")
+    browser_scan.add_argument("--acknowledge-authorization", action="store_true")
+    browser_scan.add_argument("--max-pages", type=int, default=12, help="maximum rendered same-origin pages (1-40)")
+    browser_scan.add_argument("--timeout-ms", type=int, default=15000, help="navigation timeout (1000-60000)")
+    browser_scan.add_argument("--output", default="darth-browser-report.json")
 
     watch = commands.add_parser("watch", help="continuously rescan an authorized host and alert on new findings")
     watch.add_argument("--target", required=True)
@@ -189,6 +198,37 @@ def main(argv: list[str] | None = None) -> int:
 
         scope = load_scope(args.scope)
         require_authorization(scope, args.acknowledge_authorization)
+
+        if args.command == "browser-scan":
+            if not 1 <= args.max_pages <= 40:
+                raise ValueError("--max-pages must be between 1 and 40.")
+            if not 1000 <= args.timeout_ms <= 60000:
+                raise ValueError("--timeout-ms must be between 1000 and 60000.")
+            scope.validate_url(args.target)
+            inventory = browser_discover(
+                args.target, scope, max_pages=args.max_pages,
+                timeout_ms=args.timeout_ms,
+            )
+            rendered_pages = inventory.pop("pages")
+            network_requests = inventory.pop("network_requests")
+            pages = [
+                {"url": item["url"], "status": item["status"],
+                 "resource_type": "browser-rendered-page",
+                 "forms_discovered": item["form_count"]}
+                for item in rendered_pages
+            ]
+            inventory["rendered_pages"] = rendered_pages
+            inventory["network_requests"] = network_requests
+            report = write_report(
+                args.output, target=args.target, requests_made=inventory["network_request_count"],
+                pages=pages, findings=[], api_inventory={"browser_discovery": inventory},
+            )
+            print(f"Rendered {inventory['page_count']} page(s); observed {inventory['network_request_count']} same-origin network request(s).")
+            print(f"Blocked cross-origin requests: {inventory['blocked_cross_origin_requests']}.")
+            print("Forms and controls were inventoried only; nothing was submitted or clicked.")
+            print("Network metadata is redacted; no query values, headers, cookies, or bodies are stored.")
+            print(f"JSON: {args.output}")
+            return 0
 
         if args.command == "watch":
             if args.interval_seconds < 60:
