@@ -4,6 +4,19 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
+## Version 4.1.0 capabilities
+
+### Deep passive XSS analysis
+
+The standard website scan now adds a dedicated XSS review layer:
+- Traces bounded local-variable assignments from browser-controlled sources such as URL fragments, query strings, referrers, window names, and message-event data into risky HTML or dynamic-code sinks.
+- Reviews already-fetched inline and same-origin external JavaScript without executing it.
+- Checks whether existing, non-secret query parameter values are reflected into inline scripts, event-handler attributes, or executable URL attributes. It never stores the reflected values.
+- Recognizes common sanitizer calls in simple local assignments and avoids treating safe `textContent` writes as HTML sinks.
+- Records the affected script/page, line where available, sink type, and a cautious review explanation.
+
+The XSS engine is passive: it sends no test payloads, submits no forms, clicks no controls, and executes no discovered JavaScript. It does not establish stored XSS, and its bounded static flow model cannot resolve all framework abstractions, interprocedural paths, or runtime sanitization. Every result is a candidate that requires manual validation in an authorized environment.
+
 ## Version 4.0.0 capabilities
 
 ### Frontend-to-API relationship analysis
