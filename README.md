@@ -4,6 +4,19 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
+## Version 4.0.0 capabilities
+
+### Frontend-to-API relationship analysis
+
+The standard website scan now correlates passive frontend observations with documented API paths:
+- Matches same-origin HTML form actions and statically discovered JavaScript routes to OpenAPI path templates, including numeric and UUID-like object identifiers.
+- Records whether the observed frontend method is documented by the matching API contract, while treating method mismatches as investigation leads rather than vulnerabilities.
+- Separately inventories GraphQL client operation names and root fields alongside the REST relationship map.
+- Reports unmatched frontend routes and API contract paths not referenced by the scanned frontend to help prioritize review.
+- Adds relationship coverage counts to the JSON report.
+
+The analysis uses already-fetched HTML, static JavaScript metadata, and API schemas only. It does not execute JavaScript, submit forms, invoke API operations, or infer runtime authorization from frontend exposure. Query values and form values are not retained. A route match is an investigation aid, not proof of a vulnerability.
+
 ## Version 3.9.0 capabilities
 
 ### GraphQL and modern web-application analysis
