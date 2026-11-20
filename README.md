@@ -4,6 +4,16 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
+## Version 3.8.0 capabilities
+
+### API contract risk analysis
+
+OpenAPI review now highlights two additional classes of high-value API risk:
+- Object-identifier routes such as `/orders/{orderId}` that declare no effective authentication requirement.
+- Write operations whose request schemas expose writable privilege-sensitive fields such as roles, ownership, tenant IDs, permissions, or balances, including fields reached through bounded local schema references.
+
+These are prioritized review candidates, not confirmed vulnerabilities. OpenAPI declarations cannot prove whether middleware enforces authentication, whether a field is actually persisted, or whether object-level authorization is correct. Validate with dedicated accounts and known test records before reporting an issue. The analysis is offline and does not invoke API operations.
+
 ## Version 3.7.0 capabilities
 
 ### Differential object-level authorization verification
