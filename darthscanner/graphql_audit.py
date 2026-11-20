@@ -9,7 +9,7 @@ import re
 from .checks import Finding
 
 _OPERATION = re.compile(
-    r"\\b(query|mutation|subscription)\\s*([A-Za-z_][A-Za-z0-9_]*)?\\s*(?:\\([^{}]*\\))?\\s*\\{",
+    r"\b(query|mutation|subscription)\s*([A-Za-z_][A-Za-z0-9_]*)?\s*(?:\([^{}]*\))?\s*\{",
     re.I,
 )
 _SENSITIVE = {
@@ -53,7 +53,7 @@ def discover_graphql_operations(source_url: str, source: str, max_operations: in
                 i = end - 1
             i += 1
         item = {"source_url": source_url, "operation_type": kind, "operation_name": name[:120],
-                "root_field_names": fields[:40], "source_line": text.count("\\n", 0, match.start()) + 1}
+                "root_field_names": fields[:40], "source_line": text.count("\n", 0, match.start()) + 1}
         found[(kind, name, tuple(item["root_field_names"]))] = item
         if len(found) >= max_operations:
             break
