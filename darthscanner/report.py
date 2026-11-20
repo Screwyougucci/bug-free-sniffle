@@ -19,7 +19,8 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
                  exposure_paths_checked: int = 0,
                  tls_probes: int = 0,
                  source_files_reviewed: int = 0,
-                 source_files_skipped: int = 0) -> dict:
+                 source_files_skipped: int = 0,
+                 api_inventory: dict | None = None) -> dict:
     """Normalize, deduplicate, sort, and summarize scan results."""
     unique = {}
     for item in findings:
@@ -59,6 +60,8 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
             "pages_reviewed": len(pages),
             "page_statuses": dict(page_statuses),
             "software_components_identified": len(software_components or []),
+            "api_endpoints_discovered": len((api_inventory or {}).get("api_endpoints", [])),
+            "metadata_resources_checked": len((api_inventory or {}).get("resources", [])),
             "exposure_paths_checked": exposure_paths_checked,
             "tls_probes": tls_probes,
             "source_files_reviewed": source_files_reviewed,
@@ -71,6 +74,7 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
             "fuzz_anomalies": sum("no notable" not in item.get("note", "") for item in (fuzz_observations or [])),
         },
         "software_components": software_components or [],
+        "api_inventory": api_inventory or {"resources": [], "api_endpoints": [], "sitemap_urls_discovered": [], "robots_sitemaps_discovered": []},
         "pages": pages,
         "findings": [item.to_dict() for item in normalized],
         "fuzz_observations": fuzz_observations or [],
@@ -90,7 +94,8 @@ def write_report(path: str, *, target: str, requests_made: int,
                  exposure_paths_checked: int = 0,
                  tls_probes: int = 0,
                  source_files_reviewed: int = 0,
-                 source_files_skipped: int = 0) -> dict:
+                 source_files_skipped: int = 0,
+                 api_inventory: dict | None = None) -> dict:
     payload = build_report(
         target=target,
         requests_made=requests_made,
@@ -102,6 +107,7 @@ def write_report(path: str, *, target: str, requests_made: int,
         tls_probes=tls_probes,
         source_files_reviewed=source_files_reviewed,
         source_files_skipped=source_files_skipped,
+        api_inventory=api_inventory,
     )
     Path(path).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return payload
@@ -177,7 +183,7 @@ const tiles=[
  ["Findings",coverage.findings_total??findings.length],
  ["CVE candidates",coverage.cve_matches??0],
  ["Exposed paths checked",coverage.exposure_paths_checked??0],
- ["Software identified",coverage.software_components_identified??0],["Source files reviewed",coverage.source_files_reviewed??0]
+ ["Software identified",coverage.software_components_identified??0],["API paths discovered",coverage.api_endpoints_discovered??0],["Metadata resources",coverage.metadata_resources_checked??0],["Source files reviewed",coverage.source_files_reviewed??0]
 ];
 for(const [label,value] of tiles){const card=document.createElement("div");card.className="tile";const small=document.createElement("small");small.textContent=label;const number=document.createElement("div");number.className="num";number.textContent=value;card.append(small,number);$("summary").append(card)}
 function addField(parent,label,value,cls){if(value===undefined||value===null||value==="")return;const wrap=document.createElement("div");wrap.className="field";const name=document.createElement("b");name.textContent=label;const text=document.createElement("p");if(Array.isArray(value))text.textContent=value.join(", ");else text.textContent=String(value);if(cls)text.className=cls;wrap.append(name,text);parent.append(wrap)}
