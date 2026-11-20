@@ -8,7 +8,7 @@ import sys
 from urllib.parse import urlsplit
 
 from . import __version__
-from .checks import inspect_html, inspect_http
+from .checks import Finding, inspect_html, inspect_http
 from .browser_audit import inspect_browser_code
 from .js_research import extract_same_origin_script_urls, inspect_javascript_source
 from .crawler import crawl
@@ -352,7 +352,7 @@ def main(argv: list[str] | None = None) -> int:
                                                  "sitemap_urls_discovered": [],
                                                  "robots_sitemaps_discovered": [],
                                                  "note": "Skipped: request budget reserve preserved."})
-            findings = []
+            findings = [Finding(**{key: value for key, value in item.items() if key != 'finding_id'})\n                         for item in api_inventory.get('schema_findings', [])]
             components_by_cpe = {}
             script_urls = []
             for response in responses:
