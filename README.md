@@ -336,3 +336,8 @@ The standard `scan` command checks a bounded set of same-origin metadata resourc
 ## Version 1.7.0 — passive OpenAPI security review
 
 When a same-origin OpenAPI document is already fetched, Darth Scanner reviews documented security requirements, sensitive-looking operations without an effective schema security requirement, explicit empty operation-level security overrides, query-string API-key schemes, plaintext HTTP server URLs, and HTTP Basic declarations. Findings are low-confidence schema-review candidates: gateways or application middleware may enforce access controls outside the schema. No API operations are invoked and no credentials are copied into evidence.
+
+
+## Version 1.8.0 — subtle cache and CORS review
+
+Passive HTTP checks now flag sensitive-looking HTTP 200 routes that allow shared caching (`public` or `s-maxage`) without `private`/`no-store`, and concrete CORS origins without `Vary: Origin`. These are conditional review leads: actual impact depends on user-specific response content and CDN cache behavior; a static single-origin CORS policy may not require `Vary`. No extra requests, cross-origin probes, cache-poisoning attempts, or user-data access are performed.
