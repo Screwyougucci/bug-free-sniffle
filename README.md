@@ -341,3 +341,8 @@ When a same-origin OpenAPI document is already fetched, Darth Scanner reviews do
 ## Version 1.8.0 — subtle cache and CORS review
 
 Passive HTTP checks now flag sensitive-looking HTTP 200 routes that allow shared caching (`public` or `s-maxage`) without `private`/`no-store`, and concrete CORS origins without `Vary: Origin`. These are conditional review leads: actual impact depends on user-specific response content and CDN cache behavior; a static single-origin CORS policy may not require `Vary`. No extra requests, cross-origin probes, cache-poisoning attempts, or user-data access are performed.
+
+
+## Version 1.9.0 — deeper JavaScript source-to-sink review
+
+Static JavaScript review now follows simple source-ordered local assignments and aliases from browser-controlled sources (including URL fields, message event data, and URLSearchParams reads) into selected HTML-string DOM or dynamic-code sinks. Recognized sanitizer reassignment breaks the simple taint chain. This is a bounded heuristic, not a full parser or taint engine; functions, branches, object properties, inter-module flows, and framework abstractions are not modeled. No JavaScript is executed and no payloads or extra requests are sent.
