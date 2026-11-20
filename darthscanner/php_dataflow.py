@@ -72,5 +72,8 @@ def enrich_php_dataflow(path: str|Path,graph: AnalysisGraph,*,display_path: str|
             for argument,param in zip(args,list(callee_params)):
                 for identifier in _IDENT.findall(argument):
                     source_id=_graph_value(graph,relative,identifier,call_line)
+                    if not source_id:
+                        caller_params=function_nodes[caller][1]
+                        source_id=caller_params.get(identifier.lstrip("$"),"")
                     if source_id and graph.add_edge(source_id,callee_params[param],"call-argument",0.5):added+=1
     return added
