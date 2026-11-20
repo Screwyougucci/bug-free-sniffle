@@ -129,6 +129,26 @@ def enrich_python_dataflow(
                     source_id = parameter_ids.get(loaded) or graph_node(path, loaded, statement.lineno)
                     if source_id:
                         graph.add_edge(source_id, return_id, "function-return", 0.58)
+            elif isinstance(statement, ast.Call):
+                # A parameter passed directly into a recognized sensitive call
+                # is linked to that sink within the current function body.
+                call_name = _dotted(statement.func).split(".")[-1]
+                cwe_by_sink = {
+                    "execute": "CWE-89", "executemany": "CWE-89", "raw": "CWE-89",
+                    "urlopen": "CWE-918", "send_file": "CWE-22", "FileResponse": "CWE-22",
+                    "system": "CWE-78", "popen": "CWE-78", "Popen": "CWE-78",
+                    "render_template_string": "CWE-94", "unsafe_load": "CWE-502",
+                }
+                if call_name in cwe_by_sink:
+                    sink = next((node for node in graph.nodes.values()
+                                 if node.path == relative and node.line == statement.lineno
+                                 and node.kind == "sink" and node.cwe == cwe_by_sink[call_name]), None)
+                    if sink:
+                        for argument in statement.args:
+                            for loaded in _loaded_names(argument):
+                                parameter_id = parameter_ids.get(loaded)
+                                if parameter_id:
+                                    graph.add_edge(parameter_id, sink.id, "parameter-to-sink", 0.58)
 
     added = 0
     for path, tree in parsed.items():
