@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "darth-scanner"
-version = "2.5.0"
-description = "Scoped web/server security scanner with a shared bounded provenance graph and multi-language static analysis"
+version = "2.6.0"
+description = "Scoped web/server security scanner with a multi-language static analysis graph"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
@@ -13,6 +13,7 @@ dependencies = []
 
 [project.scripts]
 darth-scanner = "darthscanner.cli:main"
+darth-graph = "darthscanner.graph_cli:main"
 
 [tool.setuptools]
 packages = ["darthscanner"]
