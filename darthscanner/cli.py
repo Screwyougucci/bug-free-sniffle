@@ -35,6 +35,7 @@ from .sigma_audit import audit_log_file
 from .metadata_discovery import discover_api_resources
 from .browser_discovery import browser_discover
 from .graphql_audit import discover_graphql_operations
+from .app_relationships import build_app_api_relationships
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -518,6 +519,10 @@ def main(argv: list[str] | None = None) -> int:
             components = list(components_by_cpe.values())
 
             api_inventory["graphql_client_operation_count"] = len(graphql_operations)
+            api_inventory["app_api_relationships"] = build_app_api_relationships(
+                app_surfaces, javascript_routes, api_inventory.get("api_endpoints", []),
+                graphql_operations,
+            )
             api_inventory["graphql_note"] = "Static GraphQL operation metadata from same-origin JavaScript; query values and operation bodies are not retained or executed."
             api_inventory["javascript_routes"] = javascript_routes
             api_inventory["javascript_route_count"] = len(javascript_routes)
