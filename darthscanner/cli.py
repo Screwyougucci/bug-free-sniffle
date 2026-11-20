@@ -36,6 +36,7 @@ from .metadata_discovery import discover_api_resources
 from .browser_discovery import browser_discover
 from .graphql_audit import discover_graphql_operations
 from .app_relationships import build_app_api_relationships
+from .xss_audit import inspect_html_xss, inspect_javascript_xss
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -471,6 +472,7 @@ def main(argv: list[str] | None = None) -> int:
                 findings.extend(inspect_response_behavior(response))
                 findings.extend(inspect_server_response(response))
                 findings.extend(inspect_browser_code(response))
+                findings.extend(inspect_html_xss(response.url, response.text))
                 script_urls.extend(extract_same_origin_script_urls(response))
                 for component in fingerprint_response(response):
                     components_by_cpe[component.cpe] = component
@@ -500,6 +502,7 @@ def main(argv: list[str] | None = None) -> int:
                 ))
                 graphql_operations.extend(discover_graphql_operations(script_url, script_response.text))
                 findings.extend(inspect_javascript_source(script_url, script_response.text))
+                findings.extend(inspect_javascript_xss(script_url, script_response.text))
                 findings.extend(inspect_server_response(script_response))
 
             tls_probes = 0

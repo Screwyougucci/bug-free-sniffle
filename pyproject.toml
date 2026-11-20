@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "darth-scanner"
-version = "4.0.0"
-description = "Scoped web/server security scanner with frontend-to-API relationship analysis, GraphQL web-app analysis, API contract risk analysis, differential access-control verification, SPA discovery, API mapping, and multi-language source analysis"
+version = "4.1.0"
+description = "Scoped web/server security scanner with passive XSS data-flow analysis, frontend-to-API relationship analysis, GraphQL web-app analysis, API contract risk analysis, differential access-control verification, SPA discovery, API mapping, and multi-language source analysis"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
