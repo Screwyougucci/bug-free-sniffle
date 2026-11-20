@@ -224,7 +224,7 @@ def main(argv: list[str] | None = None) -> int:
                 pages=pages, findings=[], api_inventory={"browser_discovery": inventory},
             )
             print(f"Rendered {inventory['page_count']} page(s); observed {inventory['network_request_count']} same-origin network request(s).")
-            print(f"Blocked cross-origin requests: {inventory['blocked_cross_origin_requests']}.")
+            print(f"Blocked cross-origin requests: {inventory['blocked_cross_origin_requests']}; request budget exhausted: {inventory['request_budget_exhausted']}.")
             print("Forms and controls were inventoried only; nothing was submitted or clicked.")
             print("Network metadata is redacted; no query values, headers, cookies, or bodies are stored.")
             print(f"JSON: {args.output}")
