@@ -56,7 +56,7 @@ def _strip_comments(source: str) -> str:
         if quote:
             if escaped:
                 escaped = False
-            elif ch == "\\\\":
+            elif ch == "\\":
                 escaped = True
             elif ch == quote:
                 quote = None
@@ -88,6 +88,27 @@ def _strip_comments(source: str) -> str:
         i += 1
     return "".join(out)
 
+
+
+def _mask_strings(source: str) -> str:
+    """Blank JS string literals so text that merely mentions a sink is not code."""
+    out = list(source)
+    quote = None
+    escaped = False
+    for index, ch in enumerate(source):
+        if quote:
+            if ch not in "\r\n":
+                out[index] = " "
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == quote:
+                quote = None
+        elif ch in ("'", '"', "\`"):
+            quote = ch
+            out[index] = " "
+    return "".join(out)
 
 def _contains_tainted(expression: str, tainted: set[str]) -> bool:
     return any(re.search(rf"(?<![\w$]){re.escape(name)}(?![\w$])", expression) for name in tainted)
@@ -129,7 +150,7 @@ def _make_finding(url: str, *, title: str, evidence: str, kind: str) -> Finding:
 
 def inspect_javascript_xss(source_url: str, source: str) -> list[Finding]:
     """Trace bounded simple assignments from browser-controlled sources to risky sinks."""
-    text = _strip_comments(source[:_MAX_SOURCE])
+    text = _mask_strings(_strip_comments(source[:_MAX_SOURCE]))
     events = []
     for match in _ASSIGNMENT.finditer(text):
         events.append((match.start(), "assignment", match, None))
@@ -214,15 +235,6 @@ class _ReflectionParser(HTMLParser):
 def inspect_html_xss(response_url: str, html: str) -> list[Finding]:
     """Inspect inline scripts and already-present query reflections without sending probes."""
     findings: list[Finding] = []
-    parser = _ReflectionParser([])
-    try:
-        parser.feed(html[:1_000_000])
-    except Exception:
-        return findings
-
-    for index, script in enumerate(parser.matches[:0]):
-        pass
-
     # Reparse bounded inline scripts through the same static data-flow engine.
     class _InlineScripts(HTMLParser):
         def __init__(self):
