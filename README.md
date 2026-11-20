@@ -4,6 +4,18 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
+## Version 3.9.0 capabilities
+
+### GraphQL and modern web-application analysis
+
+The standard website scan now reviews fetched same-origin JavaScript for statically declared GraphQL query, mutation, and subscription operations. Reports include operation type/name, source file, line, and bounded root-field metadata; query bodies, argument values, tokens, and response data are not retained. Operations are inventoried, never executed.
+
+A separate offline introspection analyzer (`inspect_graphql_introspection`) reviews a locally supplied GraphQL introspection JSON document for:
+- Mutations declaring identity- or privilege-sensitive arguments.
+- List-returning root queries without common pagination arguments, which may deserve server-side resource-limit review.
+
+These are design-risk candidates, not confirmed vulnerabilities. GraphQL authorization lives in runtime resolvers and middleware; schema metadata cannot prove access control or exploitability. Use dedicated test accounts and authorized non-production data for validation.
+
 ## Version 3.8.0 capabilities
 
 ### API contract risk analysis

@@ -34,6 +34,7 @@ from .watch import run_watch
 from .sigma_audit import audit_log_file
 from .metadata_discovery import discover_api_resources
 from .browser_discovery import browser_discover
+from .graphql_audit import discover_graphql_operations
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -462,6 +463,7 @@ def main(argv: list[str] | None = None) -> int:
             components_by_cpe = {}
             script_urls = []
             javascript_routes = []
+            graphql_operations = []
             for response in responses:
                 findings.extend(inspect_http(response))
                 findings.extend(inspect_html(response))
@@ -495,6 +497,7 @@ def main(argv: list[str] | None = None) -> int:
                 javascript_routes.extend(discover_static_get_routes(
                     script_url, script_response.text, scope, max_routes=100
                 ))
+                graphql_operations.extend(discover_graphql_operations(script_url, script_response.text))
                 findings.extend(inspect_javascript_source(script_url, script_response.text))
                 findings.extend(inspect_server_response(script_response))
 
@@ -514,6 +517,8 @@ def main(argv: list[str] | None = None) -> int:
                     components_by_cpe[component.cpe] = component
             components = list(components_by_cpe.values())
 
+            api_inventory["graphql_client_operation_count"] = len(graphql_operations)
+            api_inventory["graphql_note"] = "Static GraphQL operation metadata from same-origin JavaScript; query values and operation bodies are not retained or executed."
             api_inventory["javascript_routes"] = javascript_routes
             api_inventory["javascript_route_count"] = len(javascript_routes)
             api_inventory["app_surfaces"] = app_surfaces
