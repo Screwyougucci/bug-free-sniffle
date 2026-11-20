@@ -352,7 +352,8 @@ def main(argv: list[str] | None = None) -> int:
                                                  "sitemap_urls_discovered": [],
                                                  "robots_sitemaps_discovered": [], "schema_findings": [],
                                                  "note": "Skipped: request budget reserve preserved."})
-            findings = [Finding(**{key: value for key, value in item.items() if key != 'finding_id'})\n                         for item in api_inventory.get('schema_findings', [])]
+            findings = [Finding(**{key: value for key, value in item.items() if key != 'finding_id'})
+                         for item in api_inventory.get('schema_findings', [])]
             components_by_cpe = {}
             script_urls = []
             for response in responses:
