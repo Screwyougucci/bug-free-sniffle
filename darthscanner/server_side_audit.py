@@ -30,7 +30,7 @@ _RULES = (
 )
 
 
-def inspect_server_response(response) -> list[Finding]:
+def _inspect_server_response_base(response) -> list[Finding]:
     """Inspect a fetched response for clear diagnostic disclosure signatures."""
     if response.status is None or not response.body:
         return []
@@ -93,4 +93,25 @@ def inspect_server_fuzz_observations(observations: list[dict]) -> list[Finding]:
             remediation_steps=["Review the matching server log entry and add input validation and error handling."],
             confidence_score=30,
         ))
+    return findings
+
+
+_VERSIONED_SERVER = re.compile(r'(?i)\b(?:nginx|apache|microsoft-iis|iis|openresty|caddy|lighttpd|gunicorn|uvicorn|tomcat|jetty|express)\b[^\r\n]{0,80}?\b\d+\.\d+(?:\.\d+)?')
+_DEBUG_HEADERS = {'x-debug-token', 'x-debug-token-link', 'x-werkzeug-debugger', 'x-laravel-debugbar', 'x-aspnet-version', 'x-aspnetmvc-version'}
+
+def inspect_server_response(response) -> list[Finding]:
+    findings = _inspect_server_response_base(response)
+    headers = {str(k).lower(): v for k, v in (getattr(response, 'headers', {}) or {}).items()}
+    status = getattr(response, 'status', None)
+    for key in _DEBUG_HEADERS:
+        if headers.get(key):
+            findings.append(Finding(category='server-side', title='Debug-related response header exposed', severity='medium', confidence='high', url=response.url, kind='debug-header', description='A response header is associated with development diagnostics.', impact='Diagnostic metadata is exposed; exploitability is not established.', evidence=f'HTTP {status}; {key} header is present.', remediation='Disable production debug headers and restrict diagnostics to authenticated operators.', cwe_ids=['CWE-489'], references=['https://cwe.mitre.org/data/definitions/489.html'], remediation_steps=['Disable production debug headers and restrict diagnostics to authenticated operators.'], confidence_score=85))
+    for key in ('server', 'x-powered-by'):
+        value = str(headers.get(key, ''))
+        if value and _VERSIONED_SERVER.search(value):
+            findings.append(Finding(category='server-side', title='Detailed server software version disclosed', severity='info', confidence='medium', url=response.url, kind='server-banner', description='A response header exposes a server product and version.', impact='Version disclosure aids fingerprinting but does not prove a vulnerable version.', evidence=f'{key}: {value[:160]!r}', remediation='Suppress unnecessary product/version details in public headers.', cwe_ids=['CWE-200'], references=['https://cwe.mitre.org/data/definitions/200.html'], remediation_steps=['Suppress unnecessary product/version details in public headers.'], confidence_score=60))
+    body = (getattr(response, 'body', b'') or b'')[:1000000].decode('utf-8', errors='replace')
+    debug_patterns = (r'Werkzeug Debugger', r'DEBUG\s*=\s*True', r'Symfony Exception', r'Whitelabel Error Page', r'Detailed Error Information.*ASP\.NET', r'Unhandled exception')
+    if any(re.search(pattern, body, re.I | re.S) for pattern in debug_patterns):
+        findings.append(Finding(category='server-side', title='Development or debug error page exposed', severity='medium', confidence='medium', url=response.url, kind='debug-page', description='A common framework debug-page signature is present.', impact='A debug page may disclose environment and implementation details; code execution is not established.', evidence='Matched a known framework/runtime diagnostic signature in the response body.', remediation='Disable development/debug mode in production and return generic client errors.', cwe_ids=['CWE-489'], references=['https://cwe.mitre.org/data/definitions/489.html'], remediation_steps=['Disable development/debug mode in production.'], confidence_score=70))
     return findings
