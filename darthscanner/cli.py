@@ -220,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
             inventory["rendered_pages"] = rendered_pages
             inventory["network_requests"] = network_requests
             report = write_report(
-                args.output, target=args.target, requests_made=inventory["network_request_count"],
+                args.output, target=args.target, requests_made=inventory["requests_made"],
                 pages=pages, findings=[], api_inventory={"browser_discovery": inventory},
             )
             print(f"Rendered {inventory['page_count']} page(s); observed {inventory['network_request_count']} same-origin network request(s).")
