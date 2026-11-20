@@ -308,6 +308,7 @@ def main(argv: list[str] | None = None) -> int:
                 findings.extend(inspect_http(response))
                 findings.extend(inspect_html(response))
                 findings.extend(inspect_response_behavior(response))
+                findings.extend(inspect_server_response(response))
                 findings.extend(inspect_browser_code(response))
                 script_urls.extend(extract_same_origin_script_urls(response))
                 for component in fingerprint_response(response):
@@ -334,6 +335,7 @@ def main(argv: list[str] | None = None) -> int:
                     continue
                 script_responses.append(script_response)
                 findings.extend(inspect_javascript_source(script_url, script_response.text))
+                findings.extend(inspect_server_response(script_response))
 
             tls_probes = 0
             if urlsplit(args.target).scheme.lower() == "https":
