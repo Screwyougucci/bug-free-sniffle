@@ -26,6 +26,8 @@ from .server_side_audit import inspect_server_response, inspect_server_fuzz_obse
 from .scope import ScopeError, load_scope, require_authorization
 from .polyglot_audit import audit_source
 from .tls_checks import inspect_tls
+from .watch import run_watch
+from .sigma_audit import audit_log_file
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -43,6 +45,19 @@ def _parser() -> argparse.ArgumentParser:
     scan.add_argument("--nvd-json", help="optional local NVD 2.0 JSON feed for CVE matching")
     scan.add_argument("--inventory", help="optional CPE inventory JSON to add to discovered software")
     scan.add_argument("--output", default="darth-report.json", help="JSON report output")
+
+    watch = commands.add_parser("watch", help="continuously rescan an authorized host and alert on new findings")
+    watch.add_argument("--target", required=True)
+    watch.add_argument("--scope", default="scope.json")
+    watch.add_argument("--acknowledge-authorization", action="store_true")
+    watch.add_argument("--interval-seconds", type=int, default=300)
+    watch.add_argument("--max-cycles", type=int, default=0, help="0 means unlimited cycles in this run")
+    watch.add_argument("--output", default="darth-watch-report.json")
+    watch.add_argument("--state", default="darth-watch-state.json")
+
+    logs = commands.add_parser("audit-logs", help="review a local text or JSONL server log; no network traffic")
+    logs.add_argument("--path", required=True)
+    logs.add_argument("--output", default="darth-sigma-report.json")
 
     fuzz = commands.add_parser("fuzz", help="run bounded, benign GET query-parameter fuzzing")
     fuzz.add_argument("--url", required=True, help="specific GET URL containing the parameter")
@@ -124,6 +139,18 @@ def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        if args.command == "audit-logs":
+            import json
+            from pathlib import Path
+            result = audit_log_file(args.path)
+            Path(args.output).write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+            print(f"Sigma-style rules loaded: {result['rules_loaded']}; log lines reviewed: {result['lines_reviewed']}; matches: {len(result['matches'])}.")
+            for item in result["matches"]:
+                print(f"  [{item['level'].upper()}] {item['title']} (line {item['line']}, {item['rule_id']})")
+            print("Log matches are investigation leads, not proof of successful exploitation.")
+            print(f"JSON: {args.output}")
+            return 0
+
         if args.command == "audit-code":
             if not 1 <= args.max_files <= 10000:
                 raise ValueError("--max-files must be between 1 and 10000.")
@@ -157,6 +184,20 @@ def main(argv: list[str] | None = None) -> int:
 
         scope = load_scope(args.scope)
         require_authorization(scope, args.acknowledge_authorization)
+
+        if args.command == "watch":
+            if args.interval_seconds < 60:
+                raise ValueError("--interval-seconds must be at least 60.")
+            if args.max_cycles < 0:
+                raise ValueError("--max-cycles cannot be negative.")
+            scope.validate_url(args.target)
+            return run_watch(
+                target=args.target, scope=args.scope,
+                acknowledged=args.acknowledge_authorization,
+                interval=args.interval_seconds, output=args.output,
+                state_path=args.state, max_cycles=args.max_cycles,
+            )
+
 
         if args.command == "replay":
             scope.validate_url(args.url)
