@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "darth-scanner"
-version = "2.1.0"
-description = "Deterministic web/server scanner with multi-language JavaScript, TypeScript, PHP, Java, Go, and Python source-to-sink analysis, cache/CORS review, API inventory, continuous watch, and Sigma-style log auditing"
+version = "2.4.0"
+description = "Deterministic web/server scanner with project-wide interprocedural and cross-function taint analysis for Python, JavaScript, TypeScript, PHP, Java, and Go, plus multi-language source-to-sink review, cache/CORS review, API inventory, continuous watch, and Sigma-style log auditing"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

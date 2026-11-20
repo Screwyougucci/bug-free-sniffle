@@ -356,3 +356,16 @@ The local `audit-code` command adds a bounded AST-based Python data-flow pass. I
 ## Version 2.1.0 — multi-language request-to-sink review
 
 The local `audit-code` command adds bounded source-to-sink review for JavaScript, TypeScript, PHP, Java, and Go alongside the Python AST pass. It recognizes common request-input patterns, follows simple same-file local assignments, and looks for nearby SQL, outbound-request, filesystem, process, template, and deserialization operations. This is line-oriented heuristic analysis, not full parsers; it does not model lexical scope, control flow, function boundaries, or sanitizer semantics. Results are low-confidence review candidates. No source is executed and no network requests are sent.
+
+
+## Version 2.2.0 — project-wide Python call-graph analysis
+
+The `audit-code` command indexes Python functions across the scanned project, resolves straightforward local and imported helper calls, and builds bounded parameter-to-sink summaries. It can identify request-derived values crossing helper boundaries into SQL, outbound HTTP, filesystem, process, template, and deserialization operations. Dynamic dispatch, complex relative imports, full control-flow, and runtime reachability are not established.
+
+## Version 2.3.0 — cross-function multi-language dataflow
+
+Project-level source review adds bounded helper summaries for JavaScript, TypeScript, PHP, Java, and Go. It follows simple request-derived arguments into uniquely resolved helper functions and recognizes basic helper return flows. This is lexical, path-insensitive analysis, not a full parser or compiler dataflow engine. Ambiguous helper names are not guessed.
+
+## Version 2.4.0 — object-property dataflow
+
+Cross-function review also tracks simple object-property and indexed-field assignments before those objects are passed to uniquely resolved helpers. It conservatively retains object taint across branch assignments. Complex object aliasing, destructuring, dynamic keys, nested property paths, and runtime reachability remain outside its model.
