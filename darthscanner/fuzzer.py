@@ -25,6 +25,10 @@ class FuzzObservation:
     response_sha256: str = ""
     content_type: str = ""
     input_reflected: bool = False
+    response_changed: bool = False
+    location_changed: bool = False
+    server_error: bool = False
+    baseline_sha256: str = ""
 
 
 def _variants() -> list[tuple[str, str]]:
@@ -91,6 +95,8 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
 
     baseline = client.get(url)
     observations: list[FuzzObservation] = []
+    baseline_hash = sha256(baseline.body).hexdigest()
+    baseline_location = baseline.headers.get("location", "")
     for case, value in _variants()[:max_cases]:
         if client.requests_made >= client.max_requests:
             break
@@ -136,8 +142,40 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
             response_sha256=sha256(response.body).hexdigest(),
             content_type=response.headers.get("content-type", ""),
             input_reflected=reflected,
+            response_changed=sha256(response.body).hexdigest() != baseline_hash,
+            location_changed=response.headers.get("location", "") != baseline_location,
+            server_error=response.status is not None and response.status >= 500,
+            baseline_sha256=baseline_hash,
         ))
     return observations
+
+
+def run_fuzz_many(url: str, parameters: list[str], scope: Scope,
+                  client: SafeHttpClient, max_cases: int = 32) -> list[FuzzObservation]:
+    """Fuzz multiple existing query parameters with one shared mutation budget."""
+    scope.validate_url(url)
+    if not 1 <= max_cases <= 32:
+        raise ValueError("max_cases must be between 1 and 32.")
+    pairs = parse_qsl(urlsplit(url).query, keep_blank_values=True)
+    available = list(dict.fromkeys(key for key, _ in pairs))
+    selected = available if parameters == ["*"] else parameters
+    if not selected:
+        raise ValueError("The URL must contain at least one query parameter.")
+    if len(selected) > 8:
+        raise ValueError("At most 8 distinct parameters can be fuzzed per run.")
+    missing = [name for name in selected if name not in available]
+    if missing:
+        raise ValueError(f"Parameter(s) not present in URL: {', '.join(missing)}.")
+    # Each parameter needs one baseline plus at least one mutation.
+    remaining = min(max_cases, max(0, client.max_requests - client.requests_made - len(selected)))
+    if remaining < len(selected):
+        raise ValueError("Request budget must allow one baseline and one mutation per selected parameter.")
+    base, extra = divmod(remaining, len(selected))
+    results: list[FuzzObservation] = []
+    for index, parameter in enumerate(selected):
+        budget = base + (1 if index < extra else 0)
+        results.extend(run_fuzz(url, parameter, scope, client, budget))
+    return results
 
 
 def observations_to_dict(items: list[FuzzObservation]) -> list[dict]:

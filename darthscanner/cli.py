@@ -14,7 +14,7 @@ from .crawler import crawl
 from .cve import load_inventory, load_nvd_feed, match_cves
 from .exposure import probe_sensitive_paths
 from .fingerprint import fingerprint_response
-from .fuzzer import observations_to_dict, run_fuzz
+from .fuzzer import observations_to_dict, run_fuzz_many
 from .http_client import SafeHttpClient
 from .method_checks import inspect_http_methods
 from .report import write_report
@@ -41,10 +41,10 @@ def _parser() -> argparse.ArgumentParser:
 
     fuzz = commands.add_parser("fuzz", help="run bounded, benign GET query-parameter fuzzing")
     fuzz.add_argument("--url", required=True, help="specific GET URL containing the parameter")
-    fuzz.add_argument("--param", required=True, help="exact query parameter name to mutate")
+    fuzz.add_argument("--param", required=True, help="exact query parameter name, or * to fuzz all existing query parameters (maximum 8)")
     fuzz.add_argument("--scope", default="scope.json")
     fuzz.add_argument("--acknowledge-authorization", action="store_true")
-    fuzz.add_argument("--max-cases", type=int, default=9, help="1-32 benign mutations")
+    fuzz.add_argument("--max-cases", type=int, default=16, help="1-32 total benign mutations across selected parameters")
     fuzz.add_argument("--output", default="darth-fuzz-report.json")
 
     cve = commands.add_parser("cve", help="match a software inventory against a local NVD 2.0 JSON feed")
@@ -216,15 +216,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.max_cases < 1 or args.max_cases > 32:
             raise ValueError("--max-cases must be between 1 and 32.")
         scope.validate_url(args.url)
-        client = SafeHttpClient(scope, max_requests=min(scope.max_requests, args.max_cases + 1))
-        observations = run_fuzz(args.url, args.param, scope, client, args.max_cases)
+        client = SafeHttpClient(scope, max_requests=min(scope.max_requests, args.max_cases + (8 if args.param == "*" else 1)))
+        observations = run_fuzz_many(args.url, ["*"] if args.param == "*" else [args.param], scope, client, args.max_cases)
         _write_bundle(
             args, target=args.url, requests_made=client.requests_made, pages=[],
             findings=[], fuzz_observations=observations_to_dict(observations),
         )
         anomalies = sum("no notable" not in item.note for item in observations)
-        print(f"Fuzzed {args.param!r} with {len(observations)} benign mutation(s).")
+        print(f"Fuzzed parameter selection {args.param!r} with {len(observations)} benign mutation(s).")
         print(f"Observations requiring review: {anomalies}")
+        print(f"Distinct response bodies: {sum(item.response_changed for item in observations)}; location changes: {sum(item.location_changed for item in observations)}; 5xx responses: {sum(item.server_error for item in observations)}.")
         print("These are robustness signals, not confirmed vulnerabilities.")
         print(f"JSON: {args.output}")
         return 0
