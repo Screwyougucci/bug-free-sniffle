@@ -438,3 +438,22 @@ darth-scanner watch --target "https://your-authorized-host.example/" --scope ".\
 ```
 
 A finding marked resolved means only that it was not present in the latest successful scan. It may be temporarily hidden, intermittent, or outside current coverage. Watch mode repeats the ordinary bounded scan; it does not run exploit payloads, submit forms, or bypass scope limits.
+
+
+## Version 3.6.0 — Single-page application route coverage
+
+Browser discovery now instruments same-origin client-side navigation in rendered applications:
+- Observes History API \`pushState\` and \`replaceState\`, plus \`popstate\` and \`hashchange\` route changes.
+- Records source-to-destination route relationships even when the browser does not load a new document.
+- Adds newly observed same-origin client routes to the bounded render queue, subject to the existing page cap, request budget, and scope validation.
+- Connects route inventory with the existing page-to-API request observations, making modern SPA navigation and API activity easier to investigate.
+- Removes query strings and fragments from recorded routes; no request bodies, headers, cookies, or form values are collected.
+
+Run with the existing browser command:
+
+\`\`\`powershell
+pip install "darth-scanner[browser]"
+darth-scanner browser-scan --target "https://your-authorized-host.example/" --scope ".\\scope.json" --acknowledge-authorization --max-pages 20 --output ".\\darth-browser-report.json"
+\`\`\`
+
+The browser observer does not click controls, submit forms, or replay API calls. Client-side routes are discovered only when application code changes browser history or the URL hash during normal page rendering. Routes hidden behind login, user interaction, feature flags, or unvisited states may remain undiscovered.
