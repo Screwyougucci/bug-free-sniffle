@@ -1,10 +1,10 @@
-# Bug-Free Sniffle — Web & Server Security Scanner
+# Darth Scanner — Web & Server Security Scanner
 
 A conventional Python security scanner for websites and server software you own or are explicitly authorized to assess. **No AI, LLMs, or generative analysis.** Detection is implemented through deterministic HTTP/TLS checks, passive software fingerprints, local CVE data, and bounded fuzzing.
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.4.0 capabilities
+## Version 0.6.0 capabilities
 
 ### 1. Website security checks
 
@@ -91,7 +91,7 @@ These are heuristic findings, not confirmed zero-days. Static analysis cannot pr
 
 An unknown vulnerability can also be investigated through the bounded `fuzz` command on an explicitly authorized endpoint. It compares responses and flags behavior changes for manual review. This is black-box anomaly research, not coverage-guided binary fuzzing, and does not automatically exploit or prove a flaw.
 
-### 8. Detailed findings and exports
+### 8. Browser-side XSS and source review indicators\n\nThe scanner passively inspects HTML already fetched by the bounded crawler. It looks for inline event handlers, `javascript:` URLs, source-and-sink co-occurrence in inline scripts (for example, browser-controlled URL sources alongside HTML-string sinks), and same-origin source-map references. It never executes JavaScript, injects payloads, or fetches source maps. These findings are review leads: co-occurrence is not proof of data flow or exploitable XSS.\n\n### 9. Detailed findings and JSON reporting
 
 Every finding can include:
 - Stable finding ID.
@@ -101,13 +101,7 @@ Every finding can include:
 - CVE identifier(s), CVSS version, score, and vector where applicable.
 - Remediation summary and practical remediation steps.
 
-Each scan automatically writes three files:
-
-- `darth-report.json` — full machine-readable report and coverage totals.
-- `darth-report.html` — self-contained dashboard with search, severity, CWE, and minimum-CVSS filters.
-- `darth-findings.csv` — one row per deduplicated finding.
-
-The dashboard works locally in a browser and does not upload scan results anywhere. CSV and HTML contain finding metadata, not fetched file contents.
+Each scan writes a single UTF-8 `darth-report.json` file designed to open cleanly in Notepad. It contains findings, evidence, coverage totals, scanned page/resource metadata, and optional CVE matches. The scanner does not generate HTML or CSV reports.
 
 ## Install
 
@@ -144,7 +138,7 @@ Edit `scope.json`: set `authorized` to `true` only after confirming permission, 
 darth-scanner scan --target https://example.test --scope scope.json --acknowledge-authorization
 ```
 
-By default, this creates JSON, HTML, and CSV reports. Override paths with `--output`, `--html-output`, and `--csv-output`.
+By default, this creates one JSON report. Override its path with `--output`.
 
 ## Run a scan with CVE matching
 
@@ -195,9 +189,9 @@ Run the static audit against a local Python project you own:
 darth-scanner audit-code --path . --max-files 1000
 ```
 
-This creates `darth-source-report.json`, `darth-source-report.html`, and `darth-source-findings.csv`. The audit skips virtual environments, dependency folders, build outputs, and files larger than 2 MB. It never executes source files and redacts credential-like literal values.
+This creates `darth-source-report.json`. The audit skips virtual environments, dependency folders, build outputs, and files larger than 2 MB. It never executes source files and redacts credential-like literal values.
 
-Treat results as code-review leads. Confirm reachability, input control, authentication boundaries, and impact before reporting a vulnerability. A true zero-day requires validation and responsible disclosure; the scanner cannot promise to discover one.
+Treat results as code-review leads. Confirm reachability, input control, authentication boundaries, and impact before reporting a vulnerability. A true zero-day requires a previously unknown flaw, reproducible evidence, impact validation, and responsible disclosure. No scanner can promise to discover one or guarantee a number of findings.
 
 ## Finding quality
 
@@ -207,7 +201,7 @@ Treat results as code-review leads. Confirm reachability, input control, authent
 - **Candidate exposure:** a HEAD response indicates a sensitive-looking path may be reachable; confirm internally without exposing the contents.
 - **Fuzz anomaly:** a response difference that needs manual reproduction.
 
-The scanner does not automatically exploit findings. It is designed to identify candidates and produce evidence for authorized security review.
+The scanner does not automatically exploit findings. It is designed to identify candidates and produce evidence for authorized security review. Version 0.5.0 adds passive browser-side XSS indicators but does not claim to prove or exploit zero-days.
 
 ## Tests
 
