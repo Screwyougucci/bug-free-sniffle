@@ -29,3 +29,12 @@ treated as local functions.
 All analysis is local and static: scanned code is not executed and no network
 requests are made. Findings and graph paths remain review candidates, not
 confirmed vulnerabilities.
+
+
+## Evidence interpretation
+
+The graph records possible propagation, not proof that a particular runtime
+path is reachable. A parameter-to-sink or property-to-sink edge means the
+static syntax links those values; branch conditions, dynamic dispatch, and
+framework behavior may still change the actual flow. Review the full source
+context before reporting a finding.
