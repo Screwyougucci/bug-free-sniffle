@@ -10,7 +10,7 @@ def test_discovers_graphql_operations_without_retaining_query_values():
     assert [item["operation_type"] for item in items] == ["query", "mutation"]
     assert items[0]["operation_name"] == "AccountOverview"
     assert "private-id" not in str(items)
-    assert "email" in items[0]["root_field_names"]
+    assert "account" in items[0]["root_field_names"]
 
 
 def test_introspection_flags_sensitive_mutation_arguments_and_unbounded_list():
