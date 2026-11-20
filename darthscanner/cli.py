@@ -18,6 +18,7 @@ from .fuzzer import observations_to_dict, run_fuzz_many
 from .http_client import SafeHttpClient
 from .method_checks import inspect_http_methods
 from .report import write_report
+from .response_audit import inspect_response_behavior
 from .scope import ScopeError, load_scope, require_authorization
 from .source_audit import audit_python_source
 from .tls_checks import inspect_tls
@@ -140,6 +141,7 @@ def main(argv: list[str] | None = None) -> int:
             for response in responses:
                 findings.extend(inspect_http(response))
                 findings.extend(inspect_html(response))
+                findings.extend(inspect_response_behavior(response))
                 findings.extend(inspect_browser_code(response))
                 script_urls.extend(extract_same_origin_script_urls(response))
                 for component in fingerprint_response(response):
