@@ -351,3 +351,8 @@ Static JavaScript review now follows simple source-ordered local assignments and
 ## Version 2.0.0 — Python request-to-sink source analysis
 
 The local `audit-code` command adds a bounded AST-based Python data-flow pass. It follows simple assignments from common web request inputs into SQL execution, outbound HTTP requests, filesystem paths, process APIs, dynamic template compilation, and native deserializers. Findings include source file and line location, but omit source values. The pass does not execute scanned code or send network requests. It does not fully model functions, branches, interprocedural flows, framework wrappers, validation, or sanitizer semantics; results are low-confidence review leads, not confirmed vulnerabilities.
+
+
+## Version 2.1.0 — multi-language request-to-sink review
+
+The local `audit-code` command adds bounded source-to-sink review for JavaScript, TypeScript, PHP, Java, and Go alongside the Python AST pass. It recognizes common request-input patterns, follows simple same-file local assignments, and looks for nearby SQL, outbound-request, filesystem, process, template, and deserialization operations. This is line-oriented heuristic analysis, not full parsers; it does not model lexical scope, control flow, function boundaries, or sanitizer semantics. Results are low-confidence review candidates. No source is executed and no network requests are sent.
