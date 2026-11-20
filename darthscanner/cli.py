@@ -196,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Fuzzed {args.param!r} with {len(observations)} benign mutation(s).")
         print(f"Observations requiring review: {anomalies}")
         print("These are robustness signals, not confirmed vulnerabilities.")
-            print(f"JSON: {args.output}")
+        print(f"JSON: {args.output}")
         return 0
     except (ScopeError, ValueError, RuntimeError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
