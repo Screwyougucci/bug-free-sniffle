@@ -4,7 +4,11 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.6.0 capabilities
+## Version 0.7.0 capabilities
+
+Version 0.7.0 adds adaptive watch mode: the scanner rotates through web, TLS, exposure-metadata, and HTTP-method profiles; writes a separate JSON report for every cycle; and persists unique finding IDs in a history file. Watch mode enforces a minimum 10-second interval between profiles and still applies the scope file's per-request limits and delay.
+
+
 
 ### 1. Website security checks
 
@@ -139,6 +143,18 @@ darth-scanner scan --target https://example.test --scope scope.json --acknowledg
 ```
 
 By default, this creates one JSON report. Override its path with `--output`.
+
+## Continuous adaptive watch
+
+For a target you own or are explicitly authorized to assess, rotate through distinct bounded profiles until you press Ctrl+C:
+
+```bash
+darth-scanner watch --target https://your-authorized-host.example --scope scope.json --acknowledge-authorization --output-dir darth-watch-reports --interval 10
+```
+
+The profile order is web discovery, TLS assessment, HEAD-only exposure metadata checks, and OPTIONS-only HTTP method review. The loop never sends exploit payloads, submits forms, invokes unsafe HTTP methods, or downloads candidate sensitive files. Every cycle writes a timestamped JSON report; `history.json` tracks previously observed finding IDs and reports how many IDs are new. The default interval is 10 seconds and values below 10 are rejected. Stop with Ctrl+C. Watch mode exits if a scan fails scope validation or another scan error occurs.
+
+Run one profile manually with `darth-scanner scan --profile web|tls|exposure|methods --target ...`; omit `--profile` for the original full scan.
 
 ## Run a scan with CVE matching
 
