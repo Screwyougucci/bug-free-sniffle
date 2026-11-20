@@ -295,3 +295,14 @@ benign GET fuzzer. Dynamic URL construction, POST/PUT/PATCH/DELETE calls, extern
 hosts, and credential-like parameter names are ignored. Script fetches consume the
 same scope request budget and leave a small reserve for fuzzing. This is static
 pattern matching: it can miss routes and can produce candidates that need review.
+
+
+## Version 1.2.0 — evidence-first reproduction
+
+Research reports include redacted reproduction evidence for benign GET observations:
+baseline and observed status, response hashes, response size, content type, latency,
+anomaly score, and a one-case replay command. Credential-like query values are
+redacted. Black-box HTTP results do not identify server source files or line numbers;
+use `audit-code` on an authorized local checkout for source locations. Response
+differences are triage evidence, not proof of a vulnerability. Replay remains limited
+to one named benign case and the active exact-host authorization scope.
