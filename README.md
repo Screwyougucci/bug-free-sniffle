@@ -376,13 +376,13 @@ During `scan` and `research`, the scanner now indexes literal same-origin GET en
 
 This is static discovery only: JavaScript is not executed, dynamic URL construction and framework-generated routes are not resolved, and discovered endpoints are not automatically requested. Query-bearing candidates continue through the existing bounded, benign GET research path only when they satisfy the configured exact-host scope and request budget. Route inventory is not proof that an endpoint is reachable or vulnerable.
 
-### 10. Application surface inventory (3.2)
+## Version 3.2.0 — application surface inventory
 
 The scanner now passively inventories HTML forms and interactive controls on crawled pages. Reports include each form's action path, method, same-origin status, encoding type, and control metadata such as input type, name, required state, autocomplete, and maximum length. It also records heuristic framework hints for Next.js, Nuxt, React, Vue, Angular, Svelte, Astro, and Blazor.
 
 **Safety and privacy:** form fields are never submitted; form actions are never requested; control values, placeholders, and query-string values are not retained. External form actions are identified but not followed. Framework labels are hints based on delivered HTML, not verified package dependencies. Forms rendered only after JavaScript execution are not visible to this passive HTML parser.
 
-### 11. Continuous monitoring
+### Continuous monitoring
 
 The `watch` command repeatedly runs the bounded website scan until you stop it. By default, `--max-cycles 0` means unlimited cycles for that run. The minimum interval is 60 seconds. Press **Ctrl+C** to stop cleanly; the watch state is saved and can be resumed by running the same command again.
 
