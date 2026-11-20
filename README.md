@@ -314,3 +314,8 @@ The research command reviews server responses already fetched inside the configu
 
 These checks add no requests and do not execute SQL, shell commands, template expressions, traversal, SSRF callbacks, or state-changing methods. Database diagnostics indicate possible information disclosure, not SQL injection. A 5xx response is not proof of injection or remote code execution. Findings require manual verification and should be correlated with server logs.
 
+
+
+## Version 1.4.0 — expanded passive server-side review
+
+Normal scans now inspect already-fetched HTML and same-origin JavaScript responses for debug-page signatures, debug-related headers, and explicit server version banners. No extra requests or exploit payloads are used. Version banners are informational; diagnostics are not proof of code execution or injection.

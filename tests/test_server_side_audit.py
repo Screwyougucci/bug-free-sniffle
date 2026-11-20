@@ -6,10 +6,11 @@ from darthscanner.server_side_audit import (
 )
 
 
-def response(body: bytes, status: int = 500):
+def response(body: bytes = b'', status: int = 500, headers=None):
     return SimpleNamespace(
         status=status,
         body=body,
+        headers=headers or {},
         url="https://app.example.test/api/item",
     )
 
@@ -46,3 +47,10 @@ def test_5xx_fuzz_signal_is_low_confidence_and_deduplicated():
     assert len(findings) == 1
     assert findings[0].confidence == "low"
     assert findings[0].severity == "info"
+
+
+def test_detects_debug_page_and_headers():
+    findings = inspect_server_response(response(b'Werkzeug Debugger active', headers={'x-debug-token':'abc', 'server':'nginx/1.24.0'}))
+    assert any(item.kind == 'debug-page' for item in findings)
+    assert any(item.kind == 'debug-header' for item in findings)
+    assert any(item.kind == 'server-banner' for item in findings)
