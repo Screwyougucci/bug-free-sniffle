@@ -4,7 +4,7 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 3.4.0 capabilities\n\n### Application relationship mapping\n\nBrowser discovery now connects what it observes instead of leaving separate lists:\n- Maps rendered anchor links from the page that exposed them to the destination route.\n- Maps Fetch/XHR/WebSocket request metadata to the rendered page context that initiated it.\n- Associates observed response status codes and content types with each request signature.\n- Groups browser-observed API-like requests separately from document and asset requests.\n- Includes relationship counts so reports can show coverage at a glance.\n\nOnly URL paths, safe query parameter names, resource types, status codes, and media types are retained. Query values, fragments, request/response bodies, cookies, authorization headers, and form values are not stored. Relationships are observations, not proof that a route is vulnerable or that a backend handler was reached.\n\n## Version 3.3.0 capabilities
+## Version 3.6.0 capabilities\n\n### Application relationship mapping\n\nBrowser discovery now connects what it observes instead of leaving separate lists:\n- Maps rendered anchor links from the page that exposed them to the destination route.\n- Maps Fetch/XHR/WebSocket request metadata to the rendered page context that initiated it.\n- Associates observed response status codes and content types with each request signature.\n- Groups browser-observed API-like requests separately from document and asset requests.\n- Includes relationship counts so reports can show coverage at a glance.\n\nOnly URL paths, safe query parameter names, resource types, status codes, and media types are retained. Query values, fragments, request/response bodies, cookies, authorization headers, and form values are not stored. Relationships are observations, not proof that a route is vulnerable or that a backend handler was reached.\n\n## Version 3.3.0 capabilities
 
 ### Browser-rendered application discovery
 
@@ -26,8 +26,8 @@ python -m playwright install chromium
 Run it only against an application you are authorized to assess:
 
 ```powershell
-darth-scanner browser-scan --target "https://your-authorized-host.example/" --scope ".\\scope.json" --acknowledge-authorization --max-pages 12 --output ".\\darth-browser-report.json"
-notepad .\\darth-browser-report.json
+darth-scanner browser-scan --target "https://your-authorized-host.example/" --scope ".\scope.json" --acknowledge-authorization --max-pages 12 --output ".\darth-browser-report.json"
+notepad .\darth-browser-report.json
 ```
 
 Browser discovery is a separate command so existing lightweight scans do not require a browser install. It does not reuse authenticated browser sessions or accept passwords/session-state files in this release. JavaScript execution occurs only as normal page rendering in an isolated, headless browser; cross-origin requests are blocked by the adapter. The page cap, navigation timeout, and exact-host scope still apply.
@@ -47,7 +47,7 @@ The new `research` command:
 
 Example:
 ```powershell
-darth-scanner research --target "https://your-authorized-host.example/" --scope ".\\scope.json" --acknowledge-authorization --max-pages 12 --max-targets 30 --max-cases 32 --output ".\\darth-research-report.json"
+darth-scanner research --target "https://your-authorized-host.example/" --scope ".\scope.json" --acknowledge-authorization --max-pages 12 --max-targets 30 --max-cases 32 --output ".\\darth-research-report.json"
 notepad .\\darth-research-report.json
 ```
 
@@ -55,7 +55,7 @@ This mode only tests query URLs found in same-origin links and pages. It does no
 
 To replay one exact benign mutation recorded in the JSON report, use its `endpoint_url`, `parameter`, and `case` fields:
 ```powershell
-darth-scanner replay --url "https://your-authorized-host.example/search?q=hello" --param "q" --case "empty" --scope ".\\scope.json" --acknowledge-authorization --output ".\\darth-replay-report.json"
+darth-scanner replay --url "https://your-authorized-host.example/search?q=hello" --param "q" --case "empty" --scope ".\scope.json" --acknowledge-authorization --output ".\\darth-replay-report.json"
 notepad .\\darth-replay-report.json
 ```
 Replay accepts only named values from the built-in benign corpus and sends exactly one GET request.
@@ -434,7 +434,26 @@ Watch mode now maintains a durable finding lifecycle across repeated scans:
 Run indefinitely (Ctrl+C stops cleanly and saves state):
 
 ```powershell
-darth-scanner watch --target "https://your-authorized-host.example/" --scope ".\\scope.json" --acknowledge-authorization --interval-seconds 300 --output ".\\darth-watch-report.json" --state ".\\darth-watch-state.json"
+darth-scanner watch --target "https://your-authorized-host.example/" --scope ".\scope.json" --acknowledge-authorization --interval-seconds 300 --output ".\\darth-watch-report.json" --state ".\\darth-watch-state.json"
 ```
 
 A finding marked resolved means only that it was not present in the latest successful scan. It may be temporarily hidden, intermittent, or outside current coverage. Watch mode repeats the ordinary bounded scan; it does not run exploit payloads, submit forms, or bypass scope limits.
+
+
+## Version 3.6.0 — Single-page application route coverage
+
+Browser discovery now instruments same-origin client-side navigation in rendered applications:
+- Observes History API `pushState` and `replaceState`, plus `popstate` and `hashchange` route changes.
+- Records source-to-destination route relationships even when the browser does not load a new document.
+- Adds newly observed same-origin client routes to the bounded render queue, subject to the existing page cap, request budget, and scope validation.
+- Connects route inventory with the existing page-to-API request observations, making modern SPA navigation and API activity easier to investigate.
+- Removes query strings and fragments from recorded routes; no request bodies, headers, cookies, or form values are collected.
+
+Run with the existing browser command:
+
+```powershell
+pip install "darth-scanner[browser]"
+darth-scanner browser-scan --target "https://your-authorized-host.example/" --scope ".\scope.json" --acknowledge-authorization --max-pages 20 --output ".\darth-browser-report.json"
+```
+
+The browser observer does not click controls, submit forms, or replay API calls. Client-side routes are discovered only when application code changes browser history or the URL hash during normal page rendering. Routes hidden behind login, user interaction, feature flags, or unvisited states may remain undiscovered.

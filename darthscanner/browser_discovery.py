@@ -65,6 +65,54 @@ def _control_inventory(page) -> dict:
     }""") 
 
 
+def _route_event_edges(events: list[dict], base_url: str) -> list[dict]:
+    """Normalize same-origin client-side history events without retaining query values."""
+    edges = []
+    for event in events[:500]:
+        destination = event.get("to")
+        source = event.get("from")
+        if not isinstance(destination, str) or not _same_origin(base_url, destination):
+            continue
+        try:
+            safe_destination = _safe_url(destination)
+            safe_source = _safe_url(source) if isinstance(source, str) and _same_origin(base_url, source) else None
+        except ValueError:
+            continue
+        if safe_source and safe_source != safe_destination:
+            edges.append({
+                "source_route": safe_source,
+                "destination_route": safe_destination,
+                "relationship": "client-history-" + str(event.get("type", "navigation"))[:40],
+            })
+    return edges
+
+
+_ROUTE_OBSERVER = """(() => {
+  if (window.__darthRouteObserverInstalled) return;
+  window.__darthRouteObserverInstalled = true;
+  window.__darthRouteEvents = [];
+  const record = (type, from, to) => {
+    try {
+      const next = new URL(to, location.href);
+      const previous = new URL(from, location.href);
+      if (next.origin !== location.origin || previous.origin !== location.origin) return;
+      window.__darthRouteEvents.push({type, from: previous.href, to: next.href});
+      if (window.__darthRouteEvents.length > 500) window.__darthRouteEvents.shift();
+    } catch (_) {}
+  };
+  for (const method of ["pushState", "replaceState"]) {
+    const original = history[method];
+    history[method] = function(...args) {
+      const before = location.href;
+      const result = original.apply(this, args);
+      record(method, before, location.href);
+      return result;
+    };
+  }
+  addEventListener("popstate", () => record("popstate", document.referrer || location.href, location.href));
+  addEventListener("hashchange", event => record("hashchange", event.oldURL, event.newURL));
+})();"""
+
 def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
                      timeout_ms: int = 15000) -> dict:
     """Render and inventory a bounded same-origin SPA surface using Playwright."""
@@ -86,6 +134,7 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
     requests: dict[tuple[str, str, str], dict] = {}
     request_index: dict[tuple[str, str, str], dict] = {}
     navigation_edges: dict[tuple[str, str], dict] = {}
+    client_route_edges: dict[tuple[str, str], dict] = {}
     last_frame_urls: dict[int, str] = {}
     link_edges: dict[tuple[str, str], dict] = {}
     blocked_cross_origin = 0
@@ -98,6 +147,7 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
         context = browser.new_context(ignore_https_errors=False)
         page = context.new_page()
         page.set_default_timeout(timeout_ms)
+        page.add_init_script(_ROUTE_OBSERVER)
 
         def guard(route):
             nonlocal blocked_cross_origin, requests_made, request_budget_exhausted
@@ -199,6 +249,25 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
                         pass
                     status = response.status if response else None
                     inventory = _control_inventory(page)
+                    try:
+                        route_events = page.evaluate("""() => {
+                          const events = Array.isArray(window.__darthRouteEvents) ? window.__darthRouteEvents.slice() : [];
+                          window.__darthRouteEvents = [];
+                          return events;
+                        }""")
+                    except Exception:
+                        route_events = []
+                    for edge in _route_event_edges(route_events, target):
+                        edge_key = (edge["source_route"], edge["destination_route"])
+                        client_route_edges.setdefault(edge_key, edge)
+                        destination_url = edge["destination_route"]
+                        if destination_url not in queued and destination_url not in visited and len(queued) < max_pages * 20:
+                            try:
+                                scope.validate_url(destination_url)
+                            except ValueError:
+                                continue
+                            queue.append(destination_url)
+                            queued.add(destination_url)
                     final_url = page.url
                     if not _same_origin(target, final_url):
                         errors.append({"url": _safe_url(current), "error": "navigation left the authorized origin and was not inventoried"})
@@ -243,7 +312,8 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
         "api_relationships": [item for item in requests.values() if item.get("resource_type") in {"xhr", "fetch", "websocket"}],
         "page_link_relationships": list(link_edges.values()),
         "navigation_relationships": list(navigation_edges.values()),
-        "relationship_counts": {"api_requests": sum(1 for item in requests.values() if item.get("resource_type") in {"xhr", "fetch", "websocket"}), "page_links": len(link_edges), "navigations": len(navigation_edges)},
+        "client_route_relationships": list(client_route_edges.values()),
+        "relationship_counts": {"api_requests": sum(1 for item in requests.values() if item.get("resource_type") in {"xhr", "fetch", "websocket"}), "page_links": len(link_edges), "navigations": len(navigation_edges), "client_routes": len(client_route_edges)},
         "requests_made": requests_made,
         "request_budget_exhausted": request_budget_exhausted,
         "blocked_cross_origin_requests": blocked_cross_origin,
