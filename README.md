@@ -4,7 +4,7 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.8.0 capabilities
+## Version 0.9.0 capabilities
 
 ### 1. Website security checks
 
@@ -86,7 +86,7 @@ The scanner now passively inspects response bodies already collected by the boun
 
 These checks add protocol and parser-differential coverage without sending additional requests. A duplicate key or media-type mismatch is a bug candidate, not automatically a security vulnerability. Confirm how the actual application, API gateway, and downstream consumers parse the response.
 
-### 9. Zero-day research mode (local source audit)
+### 9. Multi-language local source review
 
 The `audit-code` command performs deterministic static analysis of local Python source files you own. It does not execute your application or any code it scans. It looks for review leads such as:
 
@@ -231,3 +231,17 @@ GitHub Actions tests Python 3.11, 3.12, and 3.13.
 ## License
 
 MIT
+
+
+### 10. Zero-day research mode (local source audit)
+
+The `audit-code` command now supports local source trees containing:
+- **Python:** AST-based checks for dynamic execution, unsafe deserialization, shell execution, SQL construction, SSRF-sensitive URL use, dynamic file paths, disabled TLS verification, weak hashes, and hard-coded credentials.
+- **JavaScript / TypeScript:** heuristic checks for dynamic evaluation, shell APIs, TLS verification disabled, and query construction patterns.
+- **PHP:** heuristic checks for dynamic evaluation, shell APIs, unsafe unserialization, TLS settings, SQL construction, and credential-like assignments.
+- **Java:** heuristic checks for dynamic evaluation, process execution, native object deserialization, TLS settings, and query construction.
+- **Go:** heuristic checks for process execution, TLS verification disabled, and query construction.
+- **Rust:** heuristic checks for dynamic evaluation/process execution patterns and query construction.
+
+Python checks use syntax-tree analysis. Other languages use line-oriented pattern matching, so they can miss multiline flows and may produce false positives. All results require manual data-flow review; this is not a substitute for language-native SAST, compiler analysis, dependency scanning, or testing.
+

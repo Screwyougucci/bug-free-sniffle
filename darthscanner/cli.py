@@ -20,7 +20,7 @@ from .method_checks import inspect_http_methods
 from .report import write_report
 from .response_audit import inspect_response_behavior
 from .scope import ScopeError, load_scope, require_authorization
-from .source_audit import audit_python_source
+from .polyglot_audit import audit_source
 from .tls_checks import inspect_tls
 
 
@@ -55,10 +55,10 @@ def _parser() -> argparse.ArgumentParser:
 
     audit = commands.add_parser(
         "audit-code",
-        help="statically inspect local Python source for security bug candidates",
+        help="statically inspect local source files for security bug candidates",
     )
-    audit.add_argument("--path", required=True, help="local Python file or source directory")
-    audit.add_argument("--max-files", type=int, default=1000, help="maximum Python files to inspect (1-10000)")
+    audit.add_argument("--path", required=True, help="local source file or directory (Python, JavaScript/TypeScript, PHP, Java, Go, Rust)")
+    audit.add_argument("--max-files", type=int, default=1000, help="maximum supported source files to inspect (1-10000)")
     audit.add_argument("--output", default="darth-source-report.json")
     return parser
 
@@ -100,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "audit-code":
             if not 1 <= args.max_files <= 10000:
                 raise ValueError("--max-files must be between 1 and 10000.")
-            findings, reviewed, skipped = audit_python_source(args.path, max_files=args.max_files)
+            findings, reviewed, skipped = audit_source(args.path, max_files=args.max_files)
             _write_bundle(
                 args,
                 target=str(args.path),
@@ -110,8 +110,8 @@ def main(argv: list[str] | None = None) -> int:
                 source_files_reviewed=reviewed,
                 source_files_skipped=skipped,
             )
-            print(f"Python source files reviewed: {reviewed}; skipped: {skipped}.")
-            print("These are static-review leads, not proof of a zero-day or exploitability.")
+            print(f"Supported source files reviewed: {reviewed}; skipped: {skipped}.")
+            print("Python uses AST analysis; other languages use conservative pattern matching. These are review leads, not proof of a zero-day or exploitability.")
             _print_finding_summary(findings)
             print(f"JSON: {args.output}")
             return 0
