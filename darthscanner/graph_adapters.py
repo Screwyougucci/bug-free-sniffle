@@ -138,7 +138,7 @@ def build_project_graph(
     if python_paths:
         python_graph = build_python_graph(
             root_path if root_path.is_dir() else python_paths[0],
-            max_files=max_files, max_nodes=max_nodes, max_edges=max_edges,
+            max_files=len(python_paths), max_nodes=max_nodes, max_edges=max_edges,
         )
         for node in python_graph.nodes.values():
             graph.add_node(
