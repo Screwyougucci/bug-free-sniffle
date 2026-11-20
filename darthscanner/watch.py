@@ -34,10 +34,10 @@ def run_watch(*, target: str, scope: str, acknowledged: bool, interval: int,
     if state_file.exists():
         try:
             previous = json.loads(state_file.read_text(encoding="utf-8"))
-            if previous.get("target") != target:
-                raise ValueError("Watch state belongs to a different target; choose another --state file.")
             if not isinstance(previous, dict):
                 raise ValueError("Watch state must contain a JSON object.")
+            if previous.get("target") != target:
+                raise ValueError("Watch state belongs to a different target; choose another --state file.")
             state.update(previous)
         except json.JSONDecodeError as exc:
             raise ValueError(f"Watch state JSON is invalid: {exc}") from exc
@@ -146,13 +146,9 @@ def run_watch(*, target: str, scope: str, acknowledged: bool, interval: int,
                     })
             state["history"] = state.get("history", [])[-500:]
             _save_json(state_file, state)
-            if report is None if rc == 0 else False:
-                pass
-            else:
-                print(f"[WATCH] Cycle {state.get('cycles', cycle_number)} complete; "
-                      f"{len(new_items) if rc == 0 and report is not None else 0} new finding(s); "
-                      f"{sum(1 for item in known.values() if item.get('lifecycle_status') == 'active')} active; "
-                      f"{sum(1 for item in known.values() if item.get('lifecycle_status') == 'resolved')} resolved.")
+            print(f"[WATCH] Cycle {state.get('cycles', cycle_number)} finished; "
+                  f"{sum(1 for item in known.values() if item.get('lifecycle_status') == 'active')} active; "
+                  f"{sum(1 for item in known.values() if item.get('lifecycle_status') == 'resolved')} resolved.")
             remaining = interval - (time.monotonic() - started)
             if (max_cycles == 0 or cycles_this_run < max_cycles) and remaining > 0:
                 time.sleep(remaining)
