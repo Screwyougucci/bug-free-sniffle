@@ -326,3 +326,8 @@ Normal scans now inspect already-fetched HTML and same-origin JavaScript respons
 The `watch` command repeats the existing bounded, authorized scan at a minimum 60-second interval, announces newly observed stable finding IDs, and saves resumable state plus an accumulated JSON report. Stop with Ctrl+C; use the same state file to resume. `--max-cycles` limits cycles in the current run.
 
 The `audit-logs` command reviews a bounded local text or JSONL log file using built-in Sigma-inspired patterns for authentication failures, traversal probes, SQLi-like and command-injection-like strings, private-address requests, and debug/stack-trace events. It makes no network requests and does not modify the log. Matches are low-confidence indicators, not proof that an attack succeeded. This is not a full Sigma YAML engine.
+
+
+## Version 1.6.0 — API and web metadata inventory
+
+The standard `scan` command checks a bounded set of same-origin metadata resources: robots.txt, sitemap.xml, security.txt, OpenAPI JSON, Swagger JSON, and api-docs. Public OpenAPI documents are parsed into a path/method inventory; same-origin sitemap URLs are recorded. The scanner does not invoke documented API operations, fetch discovered endpoint paths, follow external sitemap destinations, or exceed the configured exact-host scope/request budget. JSON reports and the local HTML dashboard include API inventory coverage.
