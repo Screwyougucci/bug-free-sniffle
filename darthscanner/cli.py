@@ -15,6 +15,7 @@ from .crawler import crawl
 from .discovery import discover_query_targets
 from .api_discovery import discover_static_get_targets
 from .js_route_discovery import discover_static_get_routes
+from .app_surface import inspect_app_surface
 from .cve import load_inventory, load_nvd_feed, match_cves
 from .exposure import probe_sensitive_paths
 from .fingerprint import fingerprint_response
@@ -228,6 +229,8 @@ def main(argv: list[str] | None = None) -> int:
             client = SafeHttpClient(scope)
             research_scope = replace(scope, max_pages=min(scope.max_pages, args.max_pages))
             responses = crawl(args.target, research_scope, client)
+            app_surfaces = [inspect_app_surface(r.url, r.text) for r in responses
+                            if "text/html" in r.headers.get("content-type", "").lower()]
             targets = discover_query_targets(responses, scope, max_targets=args.max_targets)
 
             # Static API route discovery: fetch a small number of same-origin scripts
@@ -328,6 +331,9 @@ def main(argv: list[str] | None = None) -> int:
                 api_inventory={
                     "javascript_routes": javascript_routes,
                     "javascript_route_count": len(javascript_routes),
+                    "app_surfaces": app_surfaces,
+                    "form_count": sum(item["form_count"] for item in app_surfaces),
+                    "framework_hints": sorted({name for item in app_surfaces for name in item["framework_hints"]}),
                     "note": "Literal same-origin GET routes extracted from fetched JavaScript; routes are inventory only and are not requested.",
                 },
             )
@@ -357,6 +363,8 @@ def main(argv: list[str] | None = None) -> int:
             client = SafeHttpClient(scope)
             scan_scope = replace(scope, max_pages=min(scope.max_pages, max(1, scope.max_requests - 27)))
             responses = crawl(args.target, scan_scope, client)
+            app_surfaces = [inspect_app_surface(r.url, r.text) for r in responses
+                            if "text/html" in r.headers.get("content-type", "").lower()]
             api_budget = min(7, max(0, client.max_requests - client.requests_made - 20))
             api_inventory = (discover_api_resources(args.target, scope, client, max_resources=api_budget)
                              if api_budget else {"resources": [], "api_endpoints": [],
@@ -422,6 +430,9 @@ def main(argv: list[str] | None = None) -> int:
 
             api_inventory["javascript_routes"] = javascript_routes
             api_inventory["javascript_route_count"] = len(javascript_routes)
+            api_inventory["app_surfaces"] = app_surfaces
+            api_inventory["form_count"] = sum(item["form_count"] for item in app_surfaces)
+            api_inventory["framework_hints"] = sorted({name for item in app_surfaces for name in item["framework_hints"]})
             api_inventory["javascript_route_note"] = (
                 "Literal same-origin GET routes extracted from fetched JavaScript. "
                 "Routes are inventory only; no additional requests are sent to them."
@@ -455,6 +466,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Exposure paths checked: {exposure_paths_checked}; TLS probes attempted: {tls_probes}.")
             print(f"Software fingerprints: {len(components)}")
             print(f"API paths inventoried: {len(api_inventory.get('api_endpoints', []))}; metadata resources checked: {len(api_inventory.get('resources', []))}.")
+            print(f"Forms inventoried: {api_inventory['form_count']}; framework hints: {', '.join(api_inventory['framework_hints']) or 'none detected'}.")
             _print_finding_summary(findings)
             print(f"JSON: {args.output}")
             return 0
