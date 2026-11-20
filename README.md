@@ -4,6 +4,34 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
+## Version 3.7.0 capabilities
+
+### Differential object-level authorization verification
+
+The new `access-control` command compares two explicitly supplied test identities against one object URL that the operator confirms should be owner-only. It:
+- Sends at most two same-origin GET requests: first as the owner, then as a distinct second test identity.
+- Requires both bearer tokens through environment variables; tokens are never placed on the command line or written to reports.
+- Stops if the owner identity cannot access the object.
+- Reports a BOLA/IDOR candidate only when the second identity also receives a successful response.
+- Stores response status, byte counts, and SHA-256 hashes only; response bodies and authorization headers are never retained.
+- Follows no redirects and uses the existing exact-host scope and request-delay controls.
+
+Set two tokens in PowerShell (replace the placeholders locally; do not paste tokens into chat):
+
+```powershell
+$env:DARTH_OWNER_TOKEN = "OWNER_TEST_ACCOUNT_BEARER_TOKEN"
+$env:DARTH_OTHER_TOKEN = "SECOND_TEST_ACCOUNT_BEARER_TOKEN"
+```
+
+Run only against an object you are authorized to test and have verified should not be shared:
+
+```powershell
+darth-scanner access-control --url "https://your-authorized-host.example/api/items/42" --scope ".\scope.json" --acknowledge-authorization --confirm-owner-only-resource --output ".\darth-access-control-report.json"
+notepad .\darth-access-control-report.json
+```
+
+A successful response for the second identity is a strong lead, not automatic proof: public resources, tenant sharing, administrator roles, and intentionally shared objects must be ruled out. Use two dedicated test accounts with known permissions. The check is read-only and never mutates server state.
+
 ## Version 3.6.0 capabilities\n\n### Application relationship mapping\n\nBrowser discovery now connects what it observes instead of leaving separate lists:\n- Maps rendered anchor links from the page that exposed them to the destination route.\n- Maps Fetch/XHR/WebSocket request metadata to the rendered page context that initiated it.\n- Associates observed response status codes and content types with each request signature.\n- Groups browser-observed API-like requests separately from document and asset requests.\n- Includes relationship counts so reports can show coverage at a glance.\n\nOnly URL paths, safe query parameter names, resource types, status codes, and media types are retained. Query values, fragments, request/response bodies, cookies, authorization headers, and form values are not stored. Relationships are observations, not proof that a route is vulnerable or that a backend handler was reached.\n\n## Version 3.3.0 capabilities
 
 ### Browser-rendered application discovery
