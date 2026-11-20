@@ -331,3 +331,8 @@ The `audit-logs` command reviews a bounded local text or JSONL log file using bu
 ## Version 1.6.0 — API and web metadata inventory
 
 The standard `scan` command checks a bounded set of same-origin metadata resources: robots.txt, sitemap.xml, security.txt, OpenAPI JSON, Swagger JSON, and api-docs. Public OpenAPI documents are parsed into a path/method inventory; same-origin sitemap URLs are recorded. The scanner does not invoke documented API operations, fetch discovered endpoint paths, follow external sitemap destinations, or exceed the configured exact-host scope/request budget. JSON reports and the local HTML dashboard include API inventory coverage.
+
+
+## Version 1.7.0 — passive OpenAPI security review
+
+When a same-origin OpenAPI document is already fetched, Darth Scanner reviews documented security requirements, sensitive-looking operations without an effective schema security requirement, explicit empty operation-level security overrides, query-string API-key schemes, plaintext HTTP server URLs, and HTTP Basic declarations. Findings are low-confidence schema-review candidates: gateways or application middleware may enforce access controls outside the schema. No API operations are invoked and no credentials are copied into evidence.

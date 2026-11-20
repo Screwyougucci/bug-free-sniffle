@@ -5,6 +5,7 @@ import re
 import xml.etree.ElementTree as ET
 from urllib.parse import urljoin, urlsplit
 from .scope import Scope
+from .api_schema_audit import inspect_openapi_schema
 
 _CANDIDATES=("/robots.txt","/sitemap.xml","/.well-known/security.txt","/security.txt","/openapi.json","/swagger.json","/api-docs")
 
@@ -25,7 +26,7 @@ def discover_api_resources(base_url,scope,client,*,max_resources=7):
         raise ValueError("max_resources must be between 1 and 7.")
     origin=_origin(base_url)
     root=f"{origin[0]}://{origin[1]}"+(f":{origin[2]}" if origin[2] not in (80,443) else "")+"/"
-    resources=[]; endpoints={}; sitemap_urls=set(); robots_sitemaps=set()
+    resources=[]; endpoints={}; sitemap_urls=set(); robots_sitemaps=set(); schema_findings=[]
     for path in _CANDIDATES[:max_resources]:
         if client.requests_made>=client.max_requests: break
         url=urljoin(root,path); response=client.get(url)
@@ -52,6 +53,7 @@ def discover_api_resources(base_url,scope,client,*,max_resources=7):
             try: spec=json.loads(text)
             except json.JSONDecodeError: continue
             if not isinstance(spec,dict): continue
+            schema_findings.extend(item.to_dict() for item in inspect_openapi_schema(spec,response.url))
             paths=spec.get("paths",{})
             if isinstance(paths,dict):
                 for api_path,ops in paths.items():
@@ -69,5 +71,5 @@ def discover_api_resources(base_url,scope,client,*,max_resources=7):
                 if key in {"contact","expires","policy","preferred-languages","canonical"}: fields.setdefault(key,[]).append(value.strip()[:300])
             record["security_txt_fields"]=sorted(fields); record["security_txt_present"]=True
     return {"resources":resources,"api_endpoints":sorted(endpoints.values(),key=lambda x:x["path"]),
-            "sitemap_urls_discovered":sorted(sitemap_urls),"robots_sitemaps_discovered":sorted(robots_sitemaps),
+            "sitemap_urls_discovered":sorted(sitemap_urls),"robots_sitemaps_discovered":sorted(robots_sitemaps),"schema_findings":schema_findings,
             "note":"Discovered URLs and API methods are inventory only; no API operations were invoked."}
