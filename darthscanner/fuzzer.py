@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from hashlib import sha256
+import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from .http_client import SafeHttpClient
@@ -29,6 +30,11 @@ class FuzzObservation:
     location_changed: bool = False
     server_error: bool = False
     baseline_sha256: str = ""
+    endpoint_url: str = ""
+    mutation_value: str = ""
+    normalized_response_sha256: str = ""
+    baseline_normalized_sha256: str = ""
+    anomaly_score: int = 0
 
 
 def _variants() -> list[tuple[str, str]]:
@@ -79,6 +85,34 @@ def mutate_query_parameter(url: str, parameter: str, value: str) -> str:
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(updated), ""))
 
 
+
+def normalized_body_hash(body: bytes) -> str:
+    """Hash a coarse response shape after masking common volatile values."""
+    text = body[:1_000_000].decode("utf-8", errors="replace")
+    text = re.sub(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b", "<UUID>", text)
+    text = re.sub(r"\b20\d{2}-\d{2}-\d{2}[T ][0-9:.+-]+Z?\b", "<TIMESTAMP>", text)
+    text = re.sub(r"(?i)(\b(?:request[_-]?id|trace[_-]?id|nonce|csrf[_-]?token)\b[\"']?\s*[:=]\s*)[\"'][^\"']{6,}[\"']", r"\1<VOLATILE>", text)
+    text = re.sub(r"\b[0-9a-f]{24,}\b", "<HEX>", text, flags=re.I)
+    text = re.sub(r"\s+", " ", text).strip()
+    return sha256(text.encode("utf-8")).hexdigest()
+
+
+def _anomaly_score(*, status_changed: bool, server_error: bool,
+                   location_changed: bool, content_type_changed: bool,
+                   normalized_changed: bool, large_response: bool,
+                   slow_response: bool, diagnostic: bool, reflected: bool) -> int:
+    score = 0
+    score += 45 if server_error else 0
+    score += 20 if status_changed else 0
+    score += 15 if location_changed else 0
+    score += 10 if content_type_changed else 0
+    score += 5 if normalized_changed else 0
+    score += 10 if large_response else 0
+    score += 5 if slow_response else 0
+    score += 20 if diagnostic else 0
+    score += 5 if reflected else 0
+    return min(100, score)
+
 def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
              max_cases: int = 12) -> list[FuzzObservation]:
     scope.validate_url(url)
@@ -96,6 +130,7 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
     baseline = client.get(url)
     observations: list[FuzzObservation] = []
     baseline_hash = sha256(baseline.body).hexdigest()
+    baseline_normalized_hash = normalized_body_hash(baseline.body)
     baseline_location = baseline.headers.get("location", "")
     for case, value in _variants()[:max_cases]:
         if client.requests_made >= client.max_requests:
@@ -116,6 +151,7 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
         if baseline.elapsed_seconds > 0 and response.elapsed_seconds > max(3.0, baseline.elapsed_seconds * 5):
             notes.append("response was substantially slower than baseline")
         body_lower = response.body.lower()
+        diagnostic = False
         for signature in (
             b"traceback (most recent call last)",
             b"stack trace:",
@@ -126,11 +162,30 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
         ):
             if signature in body_lower:
                 notes.append(f"response contains a diagnostic/error signature ({signature.decode('ascii', errors='ignore')})")
+                diagnostic = True
                 break
         reflected = bool(value) and value.encode("utf-8", errors="ignore") in response.body
         if reflected:
             notes.append("input value appears verbatim in the response; inspect output context and encoding")
 
+        normalized_hash = normalized_body_hash(response.body)
+        status_changed = response.status != baseline.status
+        location_changed = response.headers.get("location", "") != baseline_location
+        content_type_changed = response.headers.get("content-type", "") != baseline.headers.get("content-type", "")
+        large_response = bool(baseline.body and response.body and len(response.body) > max(4096, len(baseline.body) * 5))
+        slow_response = bool(baseline.elapsed_seconds > 0 and response.elapsed_seconds > max(3.0, baseline.elapsed_seconds * 5))
+        normalized_changed = normalized_hash != baseline_normalized_hash
+        score = _anomaly_score(
+            status_changed=status_changed,
+            server_error=response.status is not None and response.status >= 500,
+            location_changed=location_changed,
+            content_type_changed=content_type_changed,
+            normalized_changed=normalized_changed,
+            large_response=large_response,
+            slow_response=slow_response,
+            diagnostic=diagnostic,
+            reflected=reflected,
+        )
         observations.append(FuzzObservation(
             parameter=parameter,
             case=case,
@@ -146,6 +201,11 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
             location_changed=response.headers.get("location", "") != baseline_location,
             server_error=response.status is not None and response.status >= 500,
             baseline_sha256=baseline_hash,
+            endpoint_url=url,
+            mutation_value=value,
+            normalized_response_sha256=normalized_hash,
+            baseline_normalized_sha256=baseline_normalized_hash,
+            anomaly_score=score,
         ))
     return observations
 
@@ -180,3 +240,32 @@ def run_fuzz_many(url: str, parameters: list[str], scope: Scope,
 
 def observations_to_dict(items: list[FuzzObservation]) -> list[dict]:
     return [asdict(item) for item in items]
+
+def replay_case(url: str, parameter: str, case: str, scope: Scope,
+                client: SafeHttpClient) -> dict:
+    """Repeat exactly one known benign corpus case for manual confirmation."""
+    scope.validate_url(url)
+    variants = dict(_variants())
+    if case not in variants:
+        raise ValueError("Unknown replay case; choose a named benign corpus case.")
+    if client.max_requests - client.requests_made < 1:
+        raise ValueError("Replay requires one remaining request.")
+    value = variants[case]
+    replay_url = mutate_query_parameter(url, parameter, value)
+    response = client.get(replay_url)
+    return {
+        "endpoint_url": url,
+        "replay_url": replay_url,
+        "parameter": parameter,
+        "case": case,
+        "mutation_value": value,
+        "status": response.status,
+        "response_bytes": len(response.body),
+        "elapsed_seconds": round(response.elapsed_seconds, 4),
+        "content_type": response.headers.get("content-type", ""),
+        "response_sha256": sha256(response.body).hexdigest(),
+        "normalized_response_sha256": normalized_body_hash(response.body),
+        "server_error": response.status is not None and response.status >= 500,
+        "note": "single benign GET replay; compare status and hashes with the original research report",
+    }
+

@@ -122,6 +122,44 @@ def inspect_javascript_source(source_url: str, source: str) -> list[Finding]:
                 "CWE-346", 30,
             )
 
+    # Lightweight assignment-to-sink tracing. This is deliberately conservative:
+    # it only follows a directly assigned variable in a bounded source window.
+    source_assignment = re.compile(
+        r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*"
+        r"(?:window\.)?(?:location\.(?:hash|search|href)|document\.(?:URL|referrer)|"
+        r"window\.name|new\s+URLSearchParams\s*\([^)]*\))\s*;",
+        re.I,
+    )
+    for match in source_assignment.finditer(text):
+        variable = match.group(1)
+        window = text[match.end():match.end() + 6000]
+        escaped = re.escape(variable)
+        sanitized = re.search(
+            rf"\b{escaped}\s*=\s*(?:DOMPurify\.sanitize|sanitizeHTML|escapeHTML|"
+            rf"encodeForHTML)\s*\(",
+            window,
+            re.I,
+        )
+        if sanitized:
+            continue
+        sink_patterns = (
+            rf"\.(?:innerHTML|outerHTML)\s*=\s*{escaped}\b",
+            rf"\.insertAdjacentHTML\s*\([^,]+,\s*{escaped}\b",
+            rf"\bdocument\.write(?:ln)?\s*\(\s*{escaped}\b",
+            rf"\beval\s*\(\s*{escaped}\b",
+            rf"\bnew\s+Function\s*\(\s*{escaped}\b",
+        )
+        if any(re.search(pattern, window, re.I) for pattern in sink_patterns):
+            add(
+                "Browser input variable flows into a risky JavaScript sink (heuristic)",
+                "medium", "low", "data-flow-candidate",
+                "A variable assigned directly from a browser-controlled source is referenced by a potentially dangerous DOM or code-execution sink within a bounded source window.",
+                "If the value is attacker-controlled and is not safely encoded for the sink context, DOM-based script injection may be possible. This lightweight analysis does not model control flow, aliases, modules, or all sanitizers.",
+                f"Variable {variable!r} is assigned from a browser-controlled source and later appears in a risky sink pattern; source code and values are omitted.",
+                "Prefer textContent and safe DOM APIs. Apply a context-appropriate trusted sanitizer immediately before HTML sinks, and avoid dynamic code execution.",
+                "CWE-79", 45,
+            )
+
     if re.search(r"\.postMessage\s*\([\s\S]{0,300}?,\s*['\"]\*['\"]\s*\)", text):
         add(
             "postMessage uses wildcard target origin",

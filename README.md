@@ -4,9 +4,35 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.9.0 capabilities
+## Version 1.0.0 capabilities
 
-### 1. Website security checks
+### 1. Coverage-guided route and parameter research
+
+The new `research` command:
+- Crawls a bounded number of pages and extracts query-bearing links from already-fetched same-origin HTML.
+- Finds existing query parameter names without submitting forms or executing scripts.
+- Skips URLs containing parameter names that look like credentials, tokens, sessions, secrets, or signatures.
+- Distributes a shared mutation budget across discovered endpoints and parameters.
+- Uses only the existing low-rate, benign GET mutation corpus and exact-host authorization scope.
+- Stops at the scope request budget; no redirects are followed and no non-GET methods are sent.
+- Writes each tested endpoint, parameter, benign mutation value, baseline hashes, and response hashes to JSON so a suspicious case can be reconstructed.
+
+Example:
+```powershell
+darth-scanner research --target "https://your-authorized-host.example/" --scope ".\\scope.json" --acknowledge-authorization --max-pages 12 --max-targets 30 --max-cases 32 --output ".\\darth-research-report.json"
+notepad .\\darth-research-report.json
+```
+
+This mode only tests query URLs found in same-origin links and pages. It does not infer hidden routes or submit HTML forms. A GET endpoint can still be state-changing if an application is incorrectly designed; only run this against systems where this bounded testing is authorized.
+
+To replay one exact benign mutation recorded in the JSON report, use its `endpoint_url`, `parameter`, and `case` fields:
+```powershell
+darth-scanner replay --url "https://your-authorized-host.example/search?q=hello" --param "q" --case "empty" --scope ".\\scope.json" --acknowledge-authorization --output ".\\darth-replay-report.json"
+notepad .\\darth-replay-report.json
+```
+Replay accepts only named values from the built-in benign corpus and sends exactly one GET request.
+
+### 2. Website security checks
 
 - Bounded same-origin HTML crawling. Forms are never submitted and JavaScript is never executed.
 - HTTP security headers: CSP, HSTS, MIME sniffing protection, Referrer-Policy, Permissions-Policy, and clickjacking controls.
@@ -20,7 +46,7 @@ A conventional Python security scanner for websites and server software you own 
 - Error and information disclosure: directory-index signatures, common debug pages, stack traces, database error messages, and server 5xx responses.
 - HTTP method discovery through OPTIONS. TRACE, PUT, DELETE, and CONNECT are reported only when advertised; the scanner does not invoke these methods.
 
-### 2. Exposed configuration and backup discovery
+### 3. Exposed configuration and backup discovery
 
 The scanner sends **HEAD requests only** to a bounded list of likely sensitive paths, such as:
 
@@ -33,7 +59,7 @@ The scanner sends **HEAD requests only** to a bounded list of likely sensitive p
 
 It records only response status and headers such as Content-Type and Content-Length. It does **not** download, parse, save, or display file contents. If a server returns a generic HTML fallback for every path, the result is marked low-confidence and requires manual verification. HEAD support varies by server; a negative HEAD result does not prove that a file is absent or inaccessible through GET.
 
-### 3. TLS and certificate assessment
+### 4. TLS and certificate assessment
 
 - Verified certificate-chain and hostname handshake.
 - Certificate expiration and near-expiration checks.
@@ -44,13 +70,13 @@ It records only response status and headers such as Content-Type and Content-Len
 
 The local Python/OpenSSL build may not include obsolete cipher implementations. If a legacy cipher cannot be offered by the scanner itself, that cipher test is reported as not observable rather than a clean result. Protocol negotiation is based on the scanner's TLS implementation and network path; this is not a complete cryptographic compliance certification. TLS guidance reference: [NIST SP 800-52 Rev. 2](https://csrc.nist.gov/pubs/sp/800/52/r2/final). NIST announced a review of this publication in May 2026; this scanner reports observed capabilities rather than claiming formal compliance.
 
-### 4. Server and software fingerprints
+### 5. Server and software fingerprints
 
 Versioned response-header fingerprints now include nginx, Apache HTTP Server, PHP, Microsoft IIS, OpenSSL, OpenResty, Caddy, lighttpd, HAProxy, Envoy, Traefik, Eclipse Jetty, Apache Tomcat, Gunicorn, Uvicorn, Varnish Cache, and Node.js.
 
 Fingerprints are based on publicly returned headers and can be hidden, spoofed, or altered by reverse proxies. A missing fingerprint does not mean that software is absent. Use a trusted software inventory or SBOM for better coverage.
 
-### 5. CVE intelligence and CVSS severity
+### 6. CVE intelligence and CVSS severity
 
 - Matches CPE 2.3 software inventory against a local NVD 2.0 JSON feed.
 - Uses NVD affected CPE criteria and numeric dotted-version boundaries where supported.
@@ -67,7 +93,7 @@ CVSS v2 has no Critical tier; scores 7.0–10.0 are High.
 
 **CVE matches are candidates, not proof of exposure.** A product banner may be spoofed, NVD configuration expressions can require additional platform conditions, and vendors sometimes backport fixes without changing the upstream version string. Verify the exact vendor build, platform conditions, and advisory before treating a match as exploitable.
 
-### 6. Adaptive differential fuzzing
+### 7. Adaptive differential fuzzing
 
 - Fuzz one exact query parameter or use `--param "*"` to cover up to 8 existing parameters in the supplied URL.
 - Uses up to 32 total bounded, benign values across parameters, including type, encoding, Unicode, and length-boundary cases.
@@ -245,3 +271,14 @@ The `audit-code` command now supports local source trees containing:
 
 Python checks use syntax-tree analysis. Other languages use line-oriented pattern matching, so they can miss multiline flows and may produce false positives. All results require manual data-flow review; this is not a substitute for language-native SAST, compiler analysis, dependency scanning, or testing.
 
+
+
+### 11. Differential response normalization and triage scoring
+
+Fuzz observations now include both raw and normalized response hashes. Normalization masks common volatile request IDs, UUIDs, timestamps, and long hexadecimal identifiers so routine per-request changes are less likely to dominate comparisons. A heuristic anomaly score prioritizes combinations such as server errors, status changes, redirect changes, media-type changes, diagnostic signatures, large response changes, and input reflection.
+
+The score is a triage priority, **not** a probability of vulnerability. Normalization is intentionally conservative and can mask meaningful fields or fail to recognize application-specific dynamic values. Every high-priority observation should be reproduced and inspected manually.
+
+### 12. JavaScript source-to-sink review
+
+Same-origin JavaScript review now adds a lightweight assignment-to-sink heuristic: it can follow a directly assigned browser-controlled variable (for example, a URL fragment or query string) into nearby HTML-string DOM or dynamic-code sinks. It recognizes a few common sanitizer assignments but is not a full JavaScript parser or taint engine. It can miss aliases, cross-function flows, framework abstractions, and sanitizers; findings remain low-confidence review leads.
