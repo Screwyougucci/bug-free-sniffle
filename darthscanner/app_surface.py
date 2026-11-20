@@ -39,6 +39,8 @@ def _safe_action(page_url: str, action: str) -> tuple[str, bool] | None:
     parts = urlsplit(candidate)
     if parts.scheme.lower() not in {"http", "https"} or not parts.hostname:
         return None
+    if parts.username or parts.password:
+        return None
     try:
         same_origin = _origin(candidate) == _origin(page_url)
     except ValueError:
