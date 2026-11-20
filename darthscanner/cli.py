@@ -21,6 +21,7 @@ from .report import write_report
 from .scope import ScopeError, load_scope, require_authorization
 from .source_audit import audit_python_source
 from .tls_checks import inspect_tls
+from .watch import run_watch
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -38,6 +39,15 @@ def _parser() -> argparse.ArgumentParser:
     scan.add_argument("--nvd-json", help="optional local NVD 2.0 JSON feed for CVE matching")
     scan.add_argument("--inventory", help="optional CPE inventory JSON to add to discovered software")
     scan.add_argument("--output", default="darth-report.json", help="JSON report output")
+    scan.add_argument("--profile", choices=("full", "web", "tls", "exposure", "methods"), default="full", help="select one bounded analysis profile")
+
+    watch = commands.add_parser("watch", help="continuously rotate through distinct bounded scan profiles")
+    watch.add_argument("--target", required=True, help="starting http(s) URL")
+    watch.add_argument("--scope", default="scope.json", help="authorization scope JSON")
+    watch.add_argument("--acknowledge-authorization", action="store_true")
+    watch.add_argument("--output-dir", default="darth-watch-reports", help="directory for per-cycle JSON reports and history")
+    watch.add_argument("--interval", type=int, default=10, help="seconds between profile runs (minimum 10)")
+    watch.add_argument("--cycles", type=int, help="optional number of profiles to run; default is unlimited")
 
     fuzz = commands.add_parser("fuzz", help="run bounded, benign GET query-parameter fuzzing")
     fuzz.add_argument("--url", required=True, help="specific GET URL containing the parameter")
@@ -127,13 +137,24 @@ def main(argv: list[str] | None = None) -> int:
             print(f"JSON: {args.output}")
             return 0
 
+        if args.command == "watch":
+            return run_watch(
+                target=args.target,
+                scope_path=args.scope,
+                acknowledge_authorization=args.acknowledge_authorization,
+                output_dir=args.output_dir,
+                interval=args.interval,
+                cycles=args.cycles,
+            )
+
         scope = load_scope(args.scope)
         require_authorization(scope, args.acknowledge_authorization)
 
         if args.command == "scan":
             scope.validate_url(args.target)
             client = SafeHttpClient(scope)
-            responses = crawl(args.target, scope, client)
+            profile = args.profile
+            responses = crawl(args.target, scope, client) if profile in {"full", "web"} else []
             findings = []
             components_by_cpe = {}
             script_urls = []
@@ -147,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
 
             # Review a bounded number of same-origin JavaScript files. Keep at least
             # 20 requests available for the existing exposure/method checks.
-            script_budget = max(0, min(12, client.max_requests - client.requests_made - 20))
+            script_budget = max(0, min(12, client.max_requests - client.requests_made - 20)) if profile in {"full", "web"} else 0
             script_responses = []
             seen_scripts = set()
             for script_url in script_urls:
@@ -168,15 +189,17 @@ def main(argv: list[str] | None = None) -> int:
                 findings.extend(inspect_javascript_source(script_url, script_response.text))
 
             tls_probes = 0
-            if urlsplit(args.target).scheme.lower() == "https":
+            if profile in {"full", "tls"} and urlsplit(args.target).scheme.lower() == "https":
                 findings.extend(inspect_tls(args.target, scope))
                 tls_probes = 6
 
             before_exposure = client.requests_made
-            findings.extend(probe_sensitive_paths(args.target, scope, client, max_paths=18))
+            if profile in {"full", "exposure"}:
+                findings.extend(probe_sensitive_paths(args.target, scope, client, max_paths=18))
             exposure_paths_checked = client.requests_made - before_exposure
 
-            findings.extend(inspect_http_methods(args.target, scope, client))
+            if profile in {"full", "methods"}:
+                findings.extend(inspect_http_methods(args.target, scope, client))
 
             if args.inventory:
                 for component in load_inventory(args.inventory):
@@ -206,7 +229,7 @@ def main(argv: list[str] | None = None) -> int:
                 pages=pages, findings=findings, software=software,
                 exposure_paths_checked=exposure_paths_checked, tls_probes=tls_probes,
             )
-            print(f"Scanned {len(responses)} HTML page(s) and statically reviewed {len(script_responses)} same-origin JavaScript file(s); {client.requests_made} HTTP request(s).")
+            print(f"Profile: {profile}. Scanned {len(responses)} HTML page(s) and statically reviewed {len(script_responses)} same-origin JavaScript file(s); {client.requests_made} HTTP request(s).")
             print(f"Exposure paths checked: {exposure_paths_checked}; TLS probes attempted: {tls_probes}.")
             print(f"Software fingerprints: {len(components)}")
             _print_finding_summary(findings)
