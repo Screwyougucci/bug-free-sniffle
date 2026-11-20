@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from darthscanner.analysis_graph import AnalysisGraph
-from darthscanner.graph_adapters import add_multilang_file_to_graph
+from darthscanner.graph_adapters import add_multilang_file_to_graph, build_project_graph
 from darthscanner.js_ts_dataflow import enrich_js_ts_dataflow
 
 
@@ -23,6 +23,23 @@ function handler(req, db) {
             graph = AnalysisGraph()
             add_multilang_file_to_graph(path, graph, display_path="app.js")
             enrich_js_ts_dataflow(path, graph, display_path="app.js")
+            self.assertTrue(any(edge.kind == "parameter-to-sink" for edge in graph.edges))
+            self.assertTrue(any(edge.kind == "call-argument" for edge in graph.edges))
+
+
+    def test_project_graph_integrates_js_ts_enrichment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "app.ts"
+            path.write_text("""
+function runQuery(db: any, value: string) {
+  db.query(value);
+}
+function handler(req: any, db: any) {
+  const input = req.query;
+  runQuery(db, input);
+}
+""", encoding="utf-8")
+            graph = build_project_graph(directory)
             self.assertTrue(any(edge.kind == "parameter-to-sink" for edge in graph.edges))
             self.assertTrue(any(edge.kind == "call-argument" for edge in graph.edges))
 
