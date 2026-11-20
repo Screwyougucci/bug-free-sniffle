@@ -350,7 +350,7 @@ def main(argv: list[str] | None = None) -> int:
             api_inventory = (discover_api_resources(args.target, scope, client, max_resources=api_budget)
                              if api_budget else {"resources": [], "api_endpoints": [],
                                                  "sitemap_urls_discovered": [],
-                                                 "robots_sitemaps_discovered": [],
+                                                 "robots_sitemaps_discovered": [], "schema_findings": [],
                                                  "note": "Skipped: request budget reserve preserved."})
             findings = [Finding(**{key: value for key, value in item.items() if key != 'finding_id'})\n                         for item in api_inventory.get('schema_findings', [])]
             components_by_cpe = {}
