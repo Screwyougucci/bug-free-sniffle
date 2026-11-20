@@ -76,6 +76,20 @@ class XssAuditTests(unittest.TestCase):
         self.assertEqual(len(findings), 1)
         self.assertIn("event-handler", findings[0].evidence)
 
+    def test_query_value_in_ordinary_text_is_not_called_executable_context(self):
+        findings = inspect_html_xss(
+            "https://example.test/?q=needle-value",
+            "<p>Search results for needle-value</p>",
+        )
+        self.assertEqual(findings, [])
+
+    def test_string_literal_that_mentions_source_and_sink_is_not_code(self):
+        findings = inspect_javascript_xss(
+            "https://example.test/app.js",
+            "const note = 'location.hash node.innerHTML';",
+        )
+        self.assertEqual(findings, [])
+
     def test_secret_query_parameters_are_not_retained_or_analyzed(self):
         findings = inspect_html_xss(
             "https://example.test/?access_token=secret-value",
