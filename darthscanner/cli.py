@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from . import __version__
 from .checks import inspect_html, inspect_http
 from .browser_audit import inspect_browser_code
+from .deep_audit import inspect_deep_patterns
 from .crawler import crawl
 from .cve import load_inventory, load_nvd_feed, match_cves
 from .exposure import probe_sensitive_paths
@@ -139,6 +140,7 @@ def main(argv: list[str] | None = None) -> int:
                 findings.extend(inspect_http(response))
                 findings.extend(inspect_html(response))
                 findings.extend(inspect_browser_code(response))
+                findings.extend(inspect_deep_patterns(response))
                 for component in fingerprint_response(response):
                     components_by_cpe[component.cpe] = component
 
