@@ -116,6 +116,13 @@ def enrich_js_ts_dataflow(path: str | Path, graph: AnalysisGraph, *,
                     sink = next((node for node in graph.nodes.values()
                                  if node.path == relative and node.line == line_no
                                  and node.kind == "sink" and node.cwe == cwe), None)
+                    if sink is None:
+                        sink_id = graph.add_node(
+                            "sink", sink_name, path=relative, line=line_no,
+                            language="javascript", cwe=cwe, confidence=0.5,
+                            metadata={"analysis": "interprocedural", "parser": "bounded-source-adapter"},
+                        )
+                        sink = graph.nodes.get(sink_id)
                     if sink:
                         for param, param_id in parameter_ids.items():
                             if param in identifiers and graph.add_edge(
