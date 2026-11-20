@@ -147,8 +147,14 @@ def enrich_python_dataflow(
                         for argument in statement.args:
                             for loaded in _loaded_names(argument):
                                 parameter_id = parameter_ids.get(loaded)
-                                if parameter_id:
-                                    graph.add_edge(parameter_id, sink.id, "parameter-to-sink", 0.58)
+                                source_id = parameter_id or graph_node(path, loaded, statement.lineno)
+                                if source_id:
+                                    graph.add_edge(source_id, sink.id, "parameter-to-sink", 0.55)
+                            for item in ast.walk(argument):
+                                if isinstance(item, ast.Attribute) and isinstance(item.ctx, ast.Load):
+                                    property_id = property_nodes.get(_dotted(item))
+                                    if property_id:
+                                        graph.add_edge(property_id, sink.id, "property-to-sink", 0.52)
 
     added = 0
     for path, tree in parsed.items():
