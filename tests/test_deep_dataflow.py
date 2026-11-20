@@ -61,6 +61,19 @@ def handler(request, obj):
             self.assertTrue(any(node.metadata.get("analysis") == "object-property"
                                 for node in graph.nodes.values()))
 
+    def test_parameter_to_sink_path_is_connected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.write(directory, "app.py", """
+def run_query(db, value):
+    db.execute(value)
+
+def handler(request, db):
+    incoming = request.args.get("q")
+    run_query(db, incoming)
+""")
+            graph = build_project_graph(directory)
+            self.assertTrue(any(edge.kind == "parameter-to-sink" for edge in graph.edges))
+
     def test_unresolved_external_call_does_not_create_call_edge(self):
         with tempfile.TemporaryDirectory() as directory:
             self.write(directory, "app.py", """
