@@ -249,6 +249,25 @@ def browser_discover(target: str, scope: Scope, *, max_pages: int = 12,
                         pass
                     status = response.status if response else None
                     inventory = _control_inventory(page)
+                    try:
+                        route_events = page.evaluate("""() => {
+                          const events = Array.isArray(window.__darthRouteEvents) ? window.__darthRouteEvents.slice() : [];
+                          window.__darthRouteEvents = [];
+                          return events;
+                        }""")
+                    except Exception:
+                        route_events = []
+                    for edge in _route_event_edges(route_events, target):
+                        edge_key = (edge["source_route"], edge["destination_route"])
+                        client_route_edges.setdefault(edge_key, edge)
+                        destination_url = edge["destination_route"]
+                        if destination_url not in queued and destination_url not in visited and len(queued) < max_pages * 20:
+                            try:
+                                scope.validate_url(destination_url)
+                            except ValueError:
+                                continue
+                            queue.append(destination_url)
+                            queued.add(destination_url)
                     final_url = page.url
                     if not _same_origin(target, final_url):
                         errors.append({"url": _safe_url(current), "error": "navigation left the authorized origin and was not inventoried"})
