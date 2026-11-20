@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "darth-scanner"
-version = "1.6.0"
-description = "Deterministic web/server scanner with API inventory, continuous watch, and Sigma-style log auditing"
+version = "1.7.0"
+description = "Deterministic web/server scanner with micro-vulnerability review, API inventory, continuous watch, and Sigma-style log auditing"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
