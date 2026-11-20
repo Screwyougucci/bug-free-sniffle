@@ -61,7 +61,7 @@ class AppApiRelationshipTests(unittest.TestCase):
                 }],
             }],
             [{
-                "endpoint": "https://example.test/api/internal/42",
+                "endpoint": "https://example.test/api/admin/42",
                 "method": "GET",
                 "discovered_from": "https://example.test/app.js",
             }],
