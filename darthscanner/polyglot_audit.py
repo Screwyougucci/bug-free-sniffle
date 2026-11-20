@@ -12,6 +12,8 @@ import re
 from .checks import Finding
 from .source_audit import MAX_FILE_BYTES, SKIP_DIRS, _scan_python_file
 from .python_taint import scan_python_taint_flows
+from .multilang_taint import scan_multilang_taint
+from .python_taint import scan_python_taint_flows
 
 SUPPORTED = {".py", ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".php", ".java", ".go", ".rs"}
 SECRET = re.compile(
