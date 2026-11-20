@@ -4,12 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "darth-scanner"
-version = "3.1.0"
-description = "Scoped web/server security scanner with SPA JavaScript GET route discovery and multi-language interprocedural dataflow analysis"
+version = "3.3.0"
+description = "Scoped web/server security scanner with website form/input inventory, framework hints, SPA route discovery, and multi-language source analysis"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = []
+
+[project.optional-dependencies]
+browser = ["playwright>=1.45,<2"]
 
 [project.scripts]
 darth-scanner = "darthscanner.cli:main"
