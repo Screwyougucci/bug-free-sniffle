@@ -346,3 +346,8 @@ Passive HTTP checks now flag sensitive-looking HTTP 200 routes that allow shared
 ## Version 1.9.0 — deeper JavaScript source-to-sink review
 
 Static JavaScript review now follows simple source-ordered local assignments and aliases from browser-controlled sources (including URL fields, message event data, and URLSearchParams reads) into selected HTML-string DOM or dynamic-code sinks. Recognized sanitizer reassignment breaks the simple taint chain. This is a bounded heuristic, not a full parser or taint engine; functions, branches, object properties, inter-module flows, and framework abstractions are not modeled. No JavaScript is executed and no payloads or extra requests are sent.
+
+
+## Version 2.0.0 — Python request-to-sink source analysis
+
+The local `audit-code` command adds a bounded AST-based Python data-flow pass. It follows simple assignments from common web request inputs into SQL execution, outbound HTTP requests, filesystem paths, process APIs, dynamic template compilation, and native deserializers. Findings include source file and line location, but omit source values. The pass does not execute scanned code or send network requests. It does not fully model functions, branches, interprocedural flows, framework wrappers, validation, or sanitizer semantics; results are low-confidence review leads, not confirmed vulnerabilities.
