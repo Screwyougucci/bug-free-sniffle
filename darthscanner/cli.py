@@ -517,7 +517,6 @@ def main(argv: list[str] | None = None) -> int:
                     components_by_cpe[component.cpe] = component
             components = list(components_by_cpe.values())
 
-            api_inventory["graphql_client_operations"] = graphql_operations\n            api_inventory["graphql_client_operation_count"] = len(graphql_operations)\n            api_inventory["graphql_note"] = "Static GraphQL operation metadata from same-origin JavaScript; query values and operation bodies are not retained or executed."\n            api_inventory["graphql_client_operations"] = graphql_operations
             api_inventory["graphql_client_operation_count"] = len(graphql_operations)
             api_inventory["graphql_note"] = "Static GraphQL operation metadata from same-origin JavaScript; query values and operation bodies are not retained or executed."
             api_inventory["javascript_routes"] = javascript_routes
