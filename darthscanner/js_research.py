@@ -122,42 +122,67 @@ def inspect_javascript_source(source_url: str, source: str) -> list[Finding]:
                 "CWE-346", 30,
             )
 
-    # Lightweight assignment-to-sink tracing. This is deliberately conservative:
-    # it only follows a directly assigned variable in a bounded source window.
-    source_assignment = re.compile(
-        r"\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*"
-        r"(?:window\.)?(?:location\.(?:hash|search|href)|document\.(?:URL|referrer)|"
-        r"window\.name|new\s+URLSearchParams\s*\([^)]*\))\s*;",
+    # Bounded source-to-sink tracing: source-ordered simple assignments and aliases only.
+    source_expr = re.compile(
+        r"(?:\b(?:window\.)?location\.(?:hash|search|href)\b|"
+        r"\bdocument\.(?:URL|referrer)\b|\bwindow\.name\b|"
+        r"\b(?:event|e|evt|messageEvent)\.data\b|"
+        r"\bnew\s+URLSearchParams\s*\([^)]*\)\s*\.\s*get\s*\(|"
+        r"\bnew\s+URL\s*\([^)]*\)\s*\.\s*searchParams\s*\.\s*get\s*\()",
         re.I,
     )
-    for match in source_assignment.finditer(text):
-        variable = match.group(1)
-        window = text[match.end():match.end() + 6000]
-        escaped = re.escape(variable)
-        sanitized = re.search(
-            rf"\b{escaped}\s*=\s*(?:DOMPurify\.sanitize|sanitizeHTML|escapeHTML|"
-            rf"encodeForHTML)\s*\(",
-            window,
-            re.I,
-        )
-        if sanitized:
+    sanitizer_expr = re.compile(
+        r"\b(?:DOMPurify\.sanitize|sanitizeHTML|sanitizeHtml|escapeHTML|"
+        r"encodeForHTML|textContentSafe)\s*\(",
+        re.I,
+    )
+    assignment_re = re.compile(
+        r"(?m)(?:(?:const|let|var)\s+)?([A-Za-z_$][\w$]*)\s*=\s*([^;\n]+)"
+    )
+    sink_re = re.compile(
+        r"(?P<sink>\.innerHTML\s*=\s*(?P<inner>[A-Za-z_$][\w$]*)\b|"
+        r"\.outerHTML\s*=\s*(?P<outer>[A-Za-z_$][\w$]*)\b|"
+        r"\.insertAdjacentHTML\s*\([^,]+,\s*(?P<insert>[A-Za-z_$][\w$]*)\b|"
+        r"\bdocument\.write(?:ln)?\s*\(\s*(?P<write>[A-Za-z_$][\w$]*)\b|"
+        r"\beval\s*\(\s*(?P<eval>[A-Za-z_$][\w$]*)\b|"
+        r"\bnew\s+Function\s*\(\s*(?P<function>[A-Za-z_$][\w$]*)\b)",
+        re.I,
+    )
+    events = [(m.start(), "assignment", m) for m in assignment_re.finditer(text)]
+    events.extend((m.start(), "sink", m) for m in sink_re.finditer(text))
+    events.sort(key=lambda item: item[0])
+    tainted: set[str] = set()
+    reported: set[tuple[str, str]] = set()
+    for _, event_type, match in events:
+        if event_type == "assignment":
+            variable, expression = match.group(1), match.group(2).strip()
+            tainted.discard(variable)
+            if sanitizer_expr.search(expression):
+                continue
+            if source_expr.search(expression) or (
+                re.fullmatch(r"[A-Za-z_$][\w$]*", expression) and expression in tainted
+            ):
+                tainted.add(variable)
             continue
-        sink_patterns = (
-            rf"\.(?:innerHTML|outerHTML)\s*=\s*{escaped}\b",
-            rf"\.insertAdjacentHTML\s*\([^,]+,\s*{escaped}\b",
-            rf"\bdocument\.write(?:ln)?\s*\(\s*{escaped}\b",
-            rf"\beval\s*\(\s*{escaped}\b",
-            rf"\bnew\s+Function\s*\(\s*{escaped}\b",
+        sink_variable = next(
+            (match.group(name) for name in ("inner", "outer", "insert", "write", "eval", "function")
+             if match.group(name)),
+            None,
         )
-        if any(re.search(pattern, window, re.I) for pattern in sink_patterns):
+        if sink_variable and sink_variable in tainted:
+            sink_name = match.group("sink").split("=", 1)[0].strip()
+            key = (sink_variable, sink_name)
+            if key in reported:
+                continue
+            reported.add(key)
             add(
-                "Browser input variable flows into a risky JavaScript sink (heuristic)",
+                "Browser input reaches a risky JavaScript sink through local assignments",
                 "medium", "low", "data-flow-candidate",
-                "A variable assigned directly from a browser-controlled source is referenced by a potentially dangerous DOM or code-execution sink within a bounded source window.",
-                "If the value is attacker-controlled and is not safely encoded for the sink context, DOM-based script injection may be possible. This lightweight analysis does not model control flow, aliases, modules, or all sanitizers.",
-                f"Variable {variable!r} is assigned from a browser-controlled source and later appears in a risky sink pattern; source code and values are omitted.",
+                "A browser-controlled value appears to flow through simple local assignments into a potentially dangerous DOM or dynamic-code sink.",
+                "If attacker-controlled and not safely encoded for the sink context, DOM-based script injection may be possible. This bounded heuristic does not model functions, branches, object properties, modules, or framework abstractions.",
+                f"Local variable {sink_variable!r} is statically traced to {sink_name}; source text and values are omitted.",
                 "Prefer textContent and safe DOM APIs. Apply a context-appropriate trusted sanitizer immediately before HTML sinks, and avoid dynamic code execution.",
-                "CWE-79", 45,
+                "CWE-79", 50,
             )
 
     if re.search(r"\.postMessage\s*\([\s\S]{0,300}?,\s*['\"]\*['\"]\s*\)", text):
