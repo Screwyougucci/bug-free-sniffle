@@ -306,3 +306,11 @@ redacted. Black-box HTTP results do not identify server source files or line num
 use `audit-code` on an authorized local checkout for source locations. Response
 differences are triage evidence, not proof of a vulnerability. Replay remains limited
 to one named benign case and the active exact-host authorization scope.
+
+
+## Version 1.3.0 — passive server-side audit
+
+The research command reviews server responses already fetched inside the configured authorization scope. It identifies database diagnostic messages, stack traces, template-engine errors, and absolute filesystem paths. Benign fuzz cases that return HTTP 5xx are recorded as low-confidence input-handling leads.
+
+These checks add no requests and do not execute SQL, shell commands, template expressions, traversal, SSRF callbacks, or state-changing methods. Database diagnostics indicate possible information disclosure, not SQL injection. A 5xx response is not proof of injection or remote code execution. Findings require manual verification and should be correlated with server logs.
+
