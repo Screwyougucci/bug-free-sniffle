@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from dataclasses import replace
 from collections import Counter
 import sys
@@ -21,6 +22,7 @@ from .exposure import probe_sensitive_paths
 from .fingerprint import fingerprint_response
 from .fuzzer import observations_to_dict, replay_case, run_fuzz_many
 from .http_client import SafeHttpClient
+from .access_control import verify_object_access
 from .method_checks import inspect_http_methods
 from .report import write_report
 from .response_audit import inspect_response_behavior
@@ -90,6 +92,18 @@ def _parser() -> argparse.ArgumentParser:
     research.add_argument("--max-targets", type=int, default=30, help="maximum discovered query URLs (1-50)")
     research.add_argument("--max-cases", type=int, default=32, help="maximum benign mutations total (1-32)")
     research.add_argument("--output", default="darth-research-report.json")
+
+    access = commands.add_parser(
+        "access-control",
+        help="compare owner and second test-user access to one explicitly owner-only object (two read-only GETs)",
+    )
+    access.add_argument("--url", required=True, help="exact object URL owned by the first test identity")
+    access.add_argument("--owner-token-env", default="DARTH_OWNER_TOKEN", help="environment variable containing the owner bearer token")
+    access.add_argument("--other-token-env", default="DARTH_OTHER_TOKEN", help="environment variable containing a distinct non-owner bearer token")
+    access.add_argument("--scope", default="scope.json")
+    access.add_argument("--acknowledge-authorization", action="store_true")
+    access.add_argument("--confirm-owner-only-resource", action="store_true", help="confirm the object is not intentionally public or shared")
+    access.add_argument("--output", default="darth-access-control-report.json")
 
     replay = commands.add_parser(
         "replay",
@@ -198,6 +212,37 @@ def main(argv: list[str] | None = None) -> int:
 
         scope = load_scope(args.scope)
         require_authorization(scope, args.acknowledge_authorization)
+
+        if args.command == "access-control":
+            if not args.confirm_owner_only_resource:
+                raise ValueError("Confirm the URL is an owner-only object with --confirm-owner-only-resource.")
+            owner_token = os.environ.get(args.owner_token_env, "")
+            other_token = os.environ.get(args.other_token_env, "")
+            if not owner_token or not other_token:
+                raise ValueError("Set both bearer-token environment variables before running this check.")
+            if scope.max_requests < 2:
+                raise ValueError("scope.json max_requests must be at least 2 for the two-request comparison.")
+            scope.validate_url(args.url)
+            client = SafeHttpClient(scope, max_requests=2)
+            result = verify_object_access(args.url, owner_token, other_token, scope, client)
+            findings = [result["finding"]] if result["finding"] else []
+            report = _write_bundle(
+                args, target=args.url, requests_made=client.requests_made,
+                pages=[], findings=findings,
+            )
+            report["access_control_validation"] = {
+                "owner": result["owner"], "other": result["other"], "note": result["note"],
+                "credentials_stored": False, "response_bodies_stored": False,
+            }
+            import json
+            from pathlib import Path
+            Path(args.output).write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+            print(f"Owner status: {result['owner']['status']}; second identity status: {result['other']['status'] if result['other'] else 'not tested'}.")
+            print(result["note"])
+            _print_finding_summary(findings)
+            print("Exactly two read-only GET requests maximum; redirects are not followed; tokens and response bodies are not saved.")
+            print(f"JSON: {args.output}")
+            return 0
 
         if args.command == "browser-scan":
             if not 1 <= args.max_pages <= 40:
