@@ -54,6 +54,9 @@ class DiscoveryIdentityTests(unittest.TestCase):
             "category": "headers",
             "title": "Missing CSP",
             "severity": "low",
+            "cvss_score": 6.1,
+            "cvss_version": "3.1",
+            "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N",
             "evidence": "CSP absent",
             "url": "https://example.test/",
         }
@@ -61,6 +64,8 @@ class DiscoveryIdentityTests(unittest.TestCase):
         self.assertEqual(first["new"], ["F-1"])
         self.assertEqual(history["finding_registry"]["F-1"]["title"], "Missing CSP")
         self.assertEqual(history["finding_registry"]["F-1"]["severity"], "low")
+        self.assertEqual(history["finding_registry"]["F-1"]["cvss_score"], 6.1)
+        self.assertEqual(history["finding_registry"]["F-1"]["cvss_vector"], "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N")
         second = update_finding_registry(history, [finding], now="2026-01-02T00:00:00Z")
         self.assertEqual(second["recurring"], ["F-1"])
         changed = update_finding_registry(
