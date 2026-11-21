@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from hashlib import sha256
 from html.parser import HTMLParser
+import re
 from http.cookies import SimpleCookie
 from urllib.parse import urljoin, urlsplit
 
@@ -29,6 +30,8 @@ class Finding:
     affected_component: str | None = None
     remediation_steps: list[str] = field(default_factory=list)
     confidence_score: int | None = None
+    source_excerpt: str | None = None
+    source_line: int | None = None
 
     def __post_init__(self):
         if self.confidence_score is None:
@@ -46,6 +49,62 @@ class Finding:
         result = asdict(self)
         result["finding_id"] = self.finding_id
         return result
+
+
+def source_excerpt_for(response, title: str) -> tuple[str | None, int | None]:
+    """Return a short, redacted excerpt from the exact response source, when applicable."""
+    body = response.text[:1_000_000]
+    title_lower = title.lower()
+    patterns = []
+    if "password form" in title_lower:
+        patterns = [r"<form\\b[^>]*>[\\s\\S]{0,1200}?<input\\b[^>]*type\\s*=\\s*['\\"]?password\\b[^>]*>"]
+    elif "target-blank" in title_lower:
+        patterns = [r"<a\\b[^>]*target\\s*=\\s*['\\"]?_blank[^>]*>"]
+    elif "insecure http resource" in title_lower:
+        patterns = [r"<(?:script|link|iframe|img|source)\\b[^>]*(?:src|href)\\s*=\\s*['\\"]http://[^'\\"]+['\\"][^>]*>"]
+    elif "cross-origin script" in title_lower:
+        patterns = [r"<script\\b[^>]*src\\s*=\\s*['\\"][^'\\"]+['\\"][^>]*>"]
+    elif "inline javascript event" in title_lower:
+        patterns = [r"<[a-z][^>]*\\bon[a-z]+\\s*=\\s*['\\"][^'\\"]*['\\"][^>]*>"]
+    elif "javascript: url" in title_lower:
+        patterns = [r"<[a-z][^>]*(?:href|src|action)\\s*=\\s*['\\"]\\s*javascript:[^'\\"]*['\\"][^>]*>"]
+    elif "source-and-sink" in title_lower:
+        patterns = [r"(?im)^.*(?:location\\.(?:hash|search|href)|document\\.URL|URLSearchParams).*(?:innerHTML|outerHTML|insertAdjacentHTML|document\\.write|eval\\s*\\().*$"]
+    elif "postmessage" in title_lower:
+        patterns = [r"(?im)^.*postMessage.{0,300}\\*.*$"]
+    elif "web storage" in title_lower:
+        patterns = [r"(?im)^.*(?:localStorage|sessionStorage)\\.setItem.*$"]
+    elif "source map" in title_lower:
+        patterns = [r"(?im)^.*sourceMappingURL.*$"]
+    elif "directory index" in title_lower:
+        patterns = [r"(?im)^.*(?:<title>index of /|<h1>index of /|directory listing for /).*$"]
+    elif "database error" in title_lower:
+        patterns = [r"(?im)^.*(?:sql syntax|sqlstate\\[|postgresql query failed|sqlite.exception|ora-00933).*$"]
+    elif "debug" in title_lower or "traceback" in title_lower:
+        patterns = [r"(?im)^.*(?:werkzeug debugger|django\\.core\\.handlers|laravel ignition|symfony exception|traceback \\(most recent call last\\)|stack trace:).*$"]
+    if not patterns:
+        return None, None
+    match = None
+    for pattern in patterns:
+        try:
+            match = re.search(pattern, body, re.I)
+        except re.error:
+            match = None
+        if match:
+            break
+    if not match:
+        return None, None
+    start, end = match.span()
+    excerpt = body[max(0, start - 100):min(len(body), max(end, start + 1) + 100)]
+    # Keep evidence useful without retaining credentials or token-like values.
+    excerpt = re.sub(
+        r"(?i)\\b(password|passwd|token|secret|api[_-]?key|authorization|cookie)\\b([\\s:=]+)([^\\s,;<>\\"']+)",
+        r"\\1\\2[REDACTED]", excerpt,
+    )
+    excerpt = re.sub(r"(?i)(authorization\\s*:\\s*)[^\\r\\n]+", r"\\1[REDACTED]", excerpt)
+    if len(excerpt) > 600:
+        excerpt = excerpt[:600] + "…"
+    return excerpt.strip(), body.count("\\n", 0, start) + 1
 
 
 def _finding(category: str, title: str, severity: str, confidence: str,
@@ -112,6 +171,8 @@ def _finding(category: str, title: str, severity: str, confidence: str,
         remediation_steps=[remediation] if remediation else [],
         cwe_ids=cwe_ids,
         references=references,
+        source_excerpt=source_excerpt_for(response, title)[0],
+        source_line=source_excerpt_for(response, title)[1],
     )
 
 
