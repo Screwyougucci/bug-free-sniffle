@@ -11,7 +11,7 @@ from darthscanner.watch import (
 
 class WatchProfileTests(unittest.TestCase):
     def test_legacy_profile_helper_remains_deterministic(self):
-        observed = [profile_for_cycle(index) for index in range(8)]
+        observed = [profile_for_cycle(index) for index in range(16)]
         self.assertEqual(observed, list(PROFILES) * 2)
 
     def test_cycle_must_be_non_negative(self):
