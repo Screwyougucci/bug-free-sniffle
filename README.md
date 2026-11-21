@@ -107,6 +107,21 @@ Every finding can include:
 
 Each scan writes a single UTF-8 `darth-report.json` file designed to open cleanly in Notepad. It contains findings, evidence, coverage totals, scanned page/resource metadata, and optional CVE matches. The scanner does not generate HTML or CSV reports.
 
+## Desktop dashboard (Windows, Linux, macOS with Tk support)
+
+Darth Scanner 0.9.0 includes a persistent local desktop dashboard. It lets you enter a website URL, start or stop an adaptive watch, review unique findings, inspect each finding's IDs/evidence/history, and reopen the same saved target history after restarting the app. The app uses Python's built-in Tkinter; no web server or third-party GUI package is required. On Windows, launch it with `darth-scanner-app` from PowerShell after installation.
+
+The app prompts you to confirm that you own the site or have explicit permission before starting. It creates a separate local scope for the exact hostname entered (not its subdomains), uses bounded read-only web checks, and keeps reports/history under `%LOCALAPPDATA%\\DarthScanner`. Continuous watch runs until you press **STOP** or close the app. The minimum interval is 30 seconds. Entering a URL does not itself grant permission to scan it.
+
+### Launch on Windows
+
+```powershell
+py -3 -m pip install -e .
+darth-scanner-app
+```
+
+If Windows reports that Tkinter is unavailable, install/use a standard Python distribution that includes Tcl/Tk.
+
 ## Install
 
 Requires Python 3.11+. The scanner runtime uses only the Python standard library.
