@@ -99,7 +99,7 @@ def source_excerpt_for(response, title: str) -> tuple[str | None, int | None]:
     excerpt = body[max(0, start - 100):min(len(body), max(end, start + 1) + 100)]
     # Keep evidence useful without retaining credentials or token-like values.
     excerpt = re.sub(
-        r"""(?i)\b(password|passwd|token|secret|api[_-]?key|authorization|cookie)\b([\s:=]+)([^\s,;<>"']+)""",
+        r"""(?i)(password|passwd|[a-z_-]*token|secret|api[_-]?key|authorization|cookie)([\s:=]+)([^\s,;<>"']+)""",
         r"\1\2[REDACTED]", excerpt,
     )
     excerpt = re.sub(r"""(?i)(authorization\s*:\s*)[^\r\n]+""", r"\1[REDACTED]", excerpt)
