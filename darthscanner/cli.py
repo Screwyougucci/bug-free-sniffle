@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+from hashlib import sha256
 import sys
 from urllib.parse import urlsplit
 
@@ -40,13 +41,14 @@ def _parser() -> argparse.ArgumentParser:
     scan.add_argument("--inventory", help="optional CPE inventory JSON to add to discovered software")
     scan.add_argument("--output", default="darth-report.json", help="JSON report output")
     scan.add_argument("--profile", choices=("full", "web", "tls", "exposure", "methods"), default="full", help="select one bounded analysis profile")
+    scan.add_argument("--focus", choices=("all", "headers", "cookies", "cors", "redirects", "html", "browser", "javascript", "fingerprint"), default="all", help="run one analysis category on the fetched response")
 
-    watch = commands.add_parser("watch", help="continuously rotate through distinct bounded scan profiles")
+    watch = commands.add_parser("watch", help="continuously choose applicable focused web analyses")
     watch.add_argument("--target", required=True, help="starting http(s) URL")
     watch.add_argument("--scope", default="scope.json", help="authorization scope JSON")
     watch.add_argument("--acknowledge-authorization", action="store_true")
     watch.add_argument("--output-dir", default="darth-watch-reports", help="directory for per-cycle JSON reports and history")
-    watch.add_argument("--interval", type=int, default=10, help="seconds between profile runs (minimum 10)")
+    watch.add_argument("--interval", type=int, default=30, help="seconds between adaptive checks (minimum 30)")
     watch.add_argument("--cycles", type=int, help="optional number of profiles to run; default is unlimited")
 
     fuzz = commands.add_parser("fuzz", help="run bounded, benign GET query-parameter fuzzing")
@@ -158,17 +160,36 @@ def main(argv: list[str] | None = None) -> int:
             findings = []
             components_by_cpe = {}
             script_urls = []
+            focus = args.focus
+            http_focus_categories = {
+                "headers": {"http-headers", "csp", "information", "server-error", "debug", "directory-listing", "authentication"},
+                "cookies": {"cookies", "cache"},
+                "cors": {"cors"},
+                "redirects": {"redirect"},
+            }
             for response in responses:
-                findings.extend(inspect_http(response))
-                findings.extend(inspect_html(response))
-                findings.extend(inspect_browser_code(response))
+                if focus == "all" or focus in http_focus_categories:
+                    observed = inspect_http(response)
+                    if focus == "all":
+                        findings.extend(observed)
+                    else:
+                        allowed = http_focus_categories[focus]
+                        findings.extend(item for item in observed if item.category in allowed)
+                if focus in {"all", "html"}:
+                    findings.extend(inspect_html(response))
+                if focus in {"all", "browser"}:
+                    findings.extend(inspect_browser_code(response))
+                # URL extraction is passive parsing only and helps the adaptive
+                # scheduler decide whether a JavaScript review is applicable.
                 script_urls.extend(extract_same_origin_script_urls(response))
-                for component in fingerprint_response(response):
-                    components_by_cpe[component.cpe] = component
+                if focus in {"all", "fingerprint"}:
+                    for component in fingerprint_response(response):
+                        components_by_cpe[component.cpe] = component
 
-            # Review a bounded number of same-origin JavaScript files. Keep at least
-            # 20 requests available for the existing exposure/method checks.
-            script_budget = max(0, min(12, client.max_requests - client.requests_made - 20)) if profile in {"full", "web"} else 0
+            # Only the JavaScript focus fetches script resources. It remains
+            # same-origin and is constrained by the scope request budget.
+            reserve = 20 if profile == "full" and focus == "all" else 0
+            script_budget = max(0, min(12, client.max_requests - client.requests_made - reserve)) if focus in {"all", "javascript"} and profile in {"full", "web"} else 0
             script_responses = []
             seen_scripts = set()
             for script_url in script_urls:
@@ -186,7 +207,8 @@ def main(argv: list[str] | None = None) -> int:
                 if "javascript" not in content_type and not urlsplit(script_url).path.lower().endswith((".js", ".mjs")):
                     continue
                 script_responses.append(script_response)
-                findings.extend(inspect_javascript_source(script_url, script_response.text))
+                if focus in {"all", "javascript"}:
+                    findings.extend(inspect_javascript_source(script_url, script_response.text))
 
             tls_probes = 0
             if profile in {"full", "tls"} and urlsplit(args.target).scheme.lower() == "https":
@@ -211,12 +233,28 @@ def main(argv: list[str] | None = None) -> int:
                 findings.extend(match_cves(components, feed))
                 print(f"CVE matching: {len(components)} component(s) against {len(feed)} NVD record(s).")
 
-            pages = [
-                {"url": r.url, "status": r.status, "response_bytes": len(r.body),
-                 "elapsed_seconds": round(r.elapsed_seconds, 3), "error": r.error,
-                 "resource_type": "html"}
-                for r in responses
-            ]
+            pages = []
+            for r in responses:
+                content_type = r.headers.get("content-type", "").lower()
+                resource_type = "html" if "text/html" in content_type else (
+                    "javascript" if "javascript" in content_type else (
+                        "svg" if "image/svg+xml" in content_type or r.url.lower().split("?", 1)[0].endswith(".svg") else (
+                            "json" if "json" in content_type else "other"
+                        )
+                    )
+                )
+                safe_headers = "\\n".join(f"{key}:{value}" for key, value in sorted(r.headers.items()) if key != "set-cookie")
+                fingerprint_material = f"{r.status}|set-cookie={bool(r.headers.get('set-cookie'))}|".encode("utf-8") + r.body + safe_headers.encode("utf-8", errors="replace")
+                response_fingerprint = sha256(fingerprint_material).hexdigest()
+                pages.append({
+                    "url": r.url, "status": r.status, "response_bytes": len(r.body),
+                    "elapsed_seconds": round(r.elapsed_seconds, 3), "error": r.error,
+                    "resource_type": resource_type, "content_type": content_type,
+                    "has_set_cookie": bool(r.headers.get("set-cookie")),
+                    "has_cors_headers": any(key.startswith("access-control-") for key in r.headers),
+                    "has_redirect": bool(r.headers.get("location")) or (r.status is not None and 300 <= r.status < 400),
+                    "script_count": len(script_urls), "response_fingerprint": response_fingerprint,
+                })
             pages.extend(
                 {"url": r.url, "status": r.status, "response_bytes": len(r.body),
                  "elapsed_seconds": round(r.elapsed_seconds, 3), "error": r.error,
@@ -229,7 +267,7 @@ def main(argv: list[str] | None = None) -> int:
                 pages=pages, findings=findings, software=software,
                 exposure_paths_checked=exposure_paths_checked, tls_probes=tls_probes,
             )
-            print(f"Profile: {profile}. Scanned {len(responses)} HTML page(s) and statically reviewed {len(script_responses)} same-origin JavaScript file(s); {client.requests_made} HTTP request(s).")
+            print(f"Profile: {profile}; focus: {focus}. Reviewed {len(responses)} page/resource response(s) and {len(script_responses)} same-origin JavaScript file(s); {client.requests_made} HTTP request(s).")
             print(f"Exposure paths checked: {exposure_paths_checked}; TLS probes attempted: {tls_probes}.")
             print(f"Software fingerprints: {len(components)}")
             _print_finding_summary(findings)
