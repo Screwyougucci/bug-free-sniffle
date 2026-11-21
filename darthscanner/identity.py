@@ -82,6 +82,7 @@ def update_finding_registry(
     recurring = []
     for finding in findings:
         identity = finding_identity(finding)
+        url = normalize_url(finding.get("url", ""))
         fid = identity["finding_id"]
         signature = _digest(
             "sig",
