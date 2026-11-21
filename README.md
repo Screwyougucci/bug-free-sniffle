@@ -19,6 +19,9 @@ Version 0.7.0 adds adaptive watch mode: the scanner rotates through web, TLS, ex
 - Cookie analysis: Secure, HttpOnly, SameSite, SameSite=None without Secure, and __Host-/__Secure- prefix rules.
 - Cache-control review when responses set cookies.
 - HTML checks: mixed content, password forms using GET or non-HTTPS actions, cross-origin password form actions, external scripts without SRI, and target-blank links without opener isolation.
+- Passive browser-code review: inline handlers, `javascript:` URLs, source/sink co-occurrence, wildcard `postMessage`, possible auth-like web-storage keys, and same-origin source-map references.
+- Deeper static-review leads: message handlers that appear to consume `event.data` without an origin check in the same script, React `dangerouslySetInnerHTML`, cookie access combined with browser-controlled inputs, and same-origin API-documentation references.
+- These browser-code matches are observations or review candidates, not confirmed vulnerabilities. The scanner does not execute JavaScript, inject payloads, fetch source maps, or request discovered API documentation.
 - Redirect checks: HTTPS-to-HTTP downgrade redirects and cross-origin redirects. Redirects are never followed and an external redirect is not automatically labelled an open redirect.
 - Authentication check: Basic authentication advertised over plaintext HTTP.
 - Error and information disclosure: directory-index signatures, common debug pages, stack traces, database error messages, and server 5xx responses.
