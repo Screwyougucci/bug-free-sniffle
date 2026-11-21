@@ -1,5 +1,9 @@
 # Darth Scanner — Web & Server Security Scanner
 
+## Version 0.15.0
+
+Finding details now include a sanitized, repeatable proof-of-concept record for observed HTTP conditions: capture time, read-only GET method, redacted request URL, response status, elapsed time, response size, selected security-relevant response headers, and a SHA-256 digest of the response body. The body itself, cookies, authorization headers, and common secret-bearing query values are not retained. Reproduction steps explain how to repeat the same read-only request and compare the result. These are verification steps for observed behavior, not exploit payloads or proof that a condition is exploitable. Evidence metadata is persisted in history and exported in JSON, HTML, and CSV reports. Windows now prefers Per-Monitor DPI Awareness V2, with legacy fallbacks, for sharper rendering across mixed-DPI monitors.
+
 ## Version 0.14.0
 
 The desktop findings table now shows official NVD CVSS base scores beside severity, and finding details retain the CVSS vector. A score is shown only when an applicable CVE record supplies one; other observations are marked N/A rather than assigned a made-up CVSS rating. The Windows desktop app now requests per-monitor DPI awareness and scales Tk fonts to the active display DPI for sharper text and controls on high-resolution screens.
