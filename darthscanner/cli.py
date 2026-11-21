@@ -43,7 +43,7 @@ def _parser() -> argparse.ArgumentParser:
     scan.add_argument("--profile", choices=("full", "web", "tls", "exposure", "methods"), default="full", help="select one bounded analysis profile")
     scan.add_argument("--focus", choices=("all", "headers", "cookies", "cors", "redirects", "html", "browser", "javascript", "fingerprint"), default="all", help="run one analysis category on the fetched response")
 
-    watch = commands.add_parser("watch", help="continuously rotate through distinct bounded scan profiles")
+    watch = commands.add_parser("watch", help="continuously choose applicable focused web analyses")
     watch.add_argument("--target", required=True, help="starting http(s) URL")
     watch.add_argument("--scope", default="scope.json", help="authorization scope JSON")
     watch.add_argument("--acknowledge-authorization", action="store_true")
@@ -188,7 +188,8 @@ def main(argv: list[str] | None = None) -> int:
 
             # Only the JavaScript focus fetches script resources. It remains
             # same-origin and is constrained by the scope request budget.
-            script_budget = max(0, min(12, client.max_requests - client.requests_made)) if focus in {"all", "javascript"} and profile in {"full", "web"} else 0
+            reserve = 20 if profile == "full" and focus == "all" else 0
+            script_budget = max(0, min(12, client.max_requests - client.requests_made - reserve)) if focus in {"all", "javascript"} and profile in {"full", "web"} else 0
             script_responses = []
             seen_scripts = set()
             for script_url in script_urls:
