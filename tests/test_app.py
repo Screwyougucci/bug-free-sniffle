@@ -10,10 +10,10 @@ class AppTargetTests(unittest.TestCase):
             ("https://example.test/path", "example.test"),
         )
 
-    def test_preserves_port_path_and_query(self):
+    def test_preserves_port_and_path_but_drops_query(self):
         self.assertEqual(
             parse_target_url("http://localhost:8080/check?q=1"),
-            ("http://localhost:8080/check?q=1", "localhost"),
+            ("http://localhost:8080/check", "localhost"),
         )
 
     def test_drops_query_string_to_avoid_persisting_tokens(self):
