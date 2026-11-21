@@ -17,6 +17,17 @@ from urllib.request import Request, urlopen
 _HOST_RE = re.compile(r"^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$", re.I)
 _DISCOVERY_CACHE: dict[tuple[str, int, int], tuple[float, list[dict]]] = {}
 _CACHE_TTL_SECONDS = 900
+MAX_SUBDOMAIN_DEPTH = 8
+MAX_SUBDOMAIN_HOSTS = 100
+
+
+def validate_discovery_limits(max_depth: int, limit: int) -> tuple[int, int]:
+    """Validate UI/CLI recursive-discovery limits before any network activity."""
+    if isinstance(max_depth, bool) or not isinstance(max_depth, int) or not 1 <= max_depth <= MAX_SUBDOMAIN_DEPTH:
+        raise ValueError(f"Max subdomain depth must be an integer from 1 to {MAX_SUBDOMAIN_DEPTH}.")
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= MAX_SUBDOMAIN_HOSTS:
+        raise ValueError(f"Max subdomain hosts must be an integer from 1 to {MAX_SUBDOMAIN_HOSTS}.")
+    return max_depth, limit
 
 
 def _fetch_ct_names(zone: str, timeout: int) -> list[str]:
@@ -87,10 +98,7 @@ def discover_subdomain_tree(
         raise ValueError("Invalid root domain for passive subdomain discovery.") from exc
     if not root or len(root) > 253 or not _HOST_RE.fullmatch(root):
         raise ValueError("Invalid root domain for passive subdomain discovery.")
-    if isinstance(max_depth, bool) or not isinstance(max_depth, int) or not 1 <= max_depth <= 8:
-        raise ValueError("max_depth must be an integer from 1 to 8.")
-    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
-        raise ValueError("limit must be an integer from 1 to 100.")
+    validate_discovery_limits(max_depth, limit)
     if isinstance(timeout, bool) or not isinstance(timeout, int) or not 1 <= timeout <= 30:
         raise ValueError("timeout must be an integer from 1 to 30.")
 
