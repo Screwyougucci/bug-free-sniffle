@@ -6,6 +6,7 @@ on:
     branches:
       - "v0.9.1-windows-exe"
       - "v0.11.0-subdomain-evidence"
+      - "v0.12.0-cve-identification"
     tags:
       - "v*"
 
@@ -34,7 +35,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path release | Out-Null
           Copy-Item dist/DarthScanner.exe release/
           @'
-          DARTH SCANNER 0.11.0
+          DARTH SCANNER 0.12.0
 
           Run DarthScanner.exe to open the desktop dashboard.
           All scanning runs inside the desktop app. No terminal or separate engine is required.
