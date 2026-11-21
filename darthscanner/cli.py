@@ -13,6 +13,7 @@ from .browser_audit import inspect_browser_code
 from .js_research import extract_same_origin_script_urls, inspect_javascript_source
 from .crawler import crawl
 from .cve import load_inventory, load_nvd_feed, match_cves
+from .cve_online import lookup_cves_for_components
 from .exposure import probe_sensitive_paths
 from .fingerprint import fingerprint_response
 from .fuzzer import observations_to_dict, run_fuzz
@@ -39,6 +40,7 @@ def _parser() -> argparse.ArgumentParser:
     scan.add_argument("--scope", default="scope.json", help="authorization scope JSON")
     scan.add_argument("--acknowledge-authorization", action="store_true")
     scan.add_argument("--nvd-json", help="optional local NVD 2.0 JSON feed for CVE matching")
+    scan.add_argument("--no-cve-lookup", action="store_true", help="disable automatic NVD CVE lookup")
     scan.add_argument("--inventory", help="optional CPE inventory JSON to add to discovered software")
     scan.add_argument("--output", default="darth-report.json", help="JSON report output")
     scan.add_argument("--profile", choices=("full", "web", "tls", "exposure", "methods"), default="full", help="select one bounded analysis profile")
@@ -51,6 +53,7 @@ def _parser() -> argparse.ArgumentParser:
     watch.add_argument("--output-dir", default="darth-watch-reports", help="directory for per-cycle JSON reports and history")
     watch.add_argument("--interval", type=int, default=30, help="seconds between adaptive checks (minimum 30)")
     watch.add_argument("--cycles", type=int, help="optional number of profiles to run; default is unlimited")
+    watch.add_argument("--no-cve-lookup", action="store_true", help="disable automatic NVD CVE lookup")
 
     fuzz = commands.add_parser("fuzz", help="run bounded, benign GET query-parameter fuzzing")
     fuzz.add_argument("--url", required=True, help="specific GET URL containing the parameter")
