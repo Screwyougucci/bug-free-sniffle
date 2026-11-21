@@ -1,6 +1,6 @@
 import unittest
 
-from darthscanner.app import parse_target_url
+from darthscanner.app_utils import parse_target_url
 
 
 class AppTargetTests(unittest.TestCase):
