@@ -158,10 +158,6 @@ def _http_evidence(response) -> tuple[dict, list[str]]:
         "body_saved": False,
         "redaction_note": "Response body, cookies, authorization headers, and common secret query values are not stored.",
     }
-    path = urlsplit(safe_url)
-    request_target = path.path or "/"
-    if path.query:
-        request_target += "?" + path.query
     steps = [
         f"1. Send a read-only GET request to {safe_url}.",
         f"2. Compare the response status with the recorded status: {response.status}.",
@@ -221,6 +217,7 @@ def _finding(category: str, title: str, severity: str, confidence: str,
 
     references = [f"https://cwe.mitre.org/data/definitions/{item.split('-')[1]}.html"
                   for item in cwe_ids]
+    evidence_details, reproduction_steps = _http_evidence(response)
     return Finding(
         category=category,
         title=title,
@@ -237,8 +234,8 @@ def _finding(category: str, title: str, severity: str, confidence: str,
         references=references,
         source_excerpt=source_excerpt_for(response, title)[0],
         source_line=source_excerpt_for(response, title)[1],
-        evidence_details=_http_evidence(response)[0],
-        reproduction_steps=_http_evidence(response)[1],
+        evidence_details=evidence_details,
+        reproduction_steps=reproduction_steps,
     )
 
 
