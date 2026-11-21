@@ -78,6 +78,10 @@ def load_scope(path: str | Path) -> Scope:
         if not isinstance(root_domain, str) or not root_domain.strip():
             raise ScopeError("root_domain is required when include_subdomains is true.")
         root_domain = root_domain.strip().encode("idna").decode("ascii").lower().rstrip(".")
+        labels = root_domain.split(".")
+        public_suffix_prefixes = {"ac", "co", "com", "edu", "gov", "net", "org", "mil", "go", "ne", "or"}
+        if len(labels) < 2 or (len(labels) == 2 and len(labels[1]) == 2 and labels[0] in public_suffix_prefixes):
+            raise ScopeError("Use a registrable root domain, not a public suffix such as com or co.uk.")
         if root_domain not in hosts:
             raise ScopeError("root_domain must exactly match one allowed_hosts entry.")
     else:
