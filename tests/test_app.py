@@ -16,6 +16,12 @@ class AppTargetTests(unittest.TestCase):
             ("http://localhost:8080/check?q=1", "localhost"),
         )
 
+    def test_drops_query_string_to_avoid_persisting_tokens(self):
+        self.assertEqual(
+            parse_target_url("https://example.test/path?token=secret#part"),
+            ("https://example.test/path", "example.test"),
+        )
+
     def test_rejects_unsupported_scheme(self):
         with self.assertRaises(ValueError):
             parse_target_url("ftp://example.test/file")
