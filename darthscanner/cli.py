@@ -244,7 +244,8 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 )
                 safe_headers = "\\n".join(f"{key}:{value}" for key, value in sorted(r.headers.items()) if key != "set-cookie")
-                response_fingerprint = sha256(r.body + safe_headers.encode("utf-8", errors="replace")).hexdigest()
+                fingerprint_material = f"{r.status}|set-cookie={bool(r.headers.get('set-cookie'))}|".encode("utf-8") + r.body + safe_headers.encode("utf-8", errors="replace")
+                response_fingerprint = sha256(fingerprint_material).hexdigest()
                 pages.append({
                     "url": r.url, "status": r.status, "response_bytes": len(r.body),
                     "elapsed_seconds": round(r.elapsed_seconds, 3), "error": r.error,
