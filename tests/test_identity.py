@@ -66,7 +66,11 @@ class DiscoveryIdentityTests(unittest.TestCase):
             now="2026-01-03T00:00:00Z",
         )
         self.assertEqual(changed["changed"], ["F-1"])
-        resolved = update_finding_registry(history, [], complete_round=True, now="2026-01-04T00:00:00Z")
+        update_finding_registry(
+            history, [{**finding, "evidence": "CSP header still absent; response changed"}],
+            complete_round=True, now="2026-01-04T00:00:00Z",
+        )
+        resolved = update_finding_registry(history, [], complete_round=True, now="2026-01-05T00:00:00Z")
         self.assertEqual(resolved["resolved"], ["F-1"])
         self.assertEqual(history["finding_registry"]["F-1"]["status"], "resolved")
 
