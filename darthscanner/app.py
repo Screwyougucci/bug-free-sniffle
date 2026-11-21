@@ -20,6 +20,7 @@ from tkinter import messagebox, ttk
 from .identity import target_id, resource_id
 from .app_utils import parse_target_url
 from .watch import run_watch
+from .subdomains import validate_discovery_limits
 
 
 APP_NAME = "Darth Scanner"
@@ -249,11 +250,27 @@ class DarthScannerApp:
         except ValueError as exc:
             messagebox.showerror("Invalid website", str(exc))
             return
+
+        # Spinbox values can be pasted outside their visual range. Reject invalid
+        # values before confirmation, scope-file creation, or any network activity.
+        try:
+            if self.include_subdomains_var.get():
+                subdomain_depth, subdomain_host_limit = validate_discovery_limits(
+                    self.subdomain_depth_var.get(), self.subdomain_hosts_var.get()
+                )
+            else:
+                subdomain_depth, subdomain_host_limit = 5, 25
+        except (tk.TclError, ValueError) as exc:
+            messagebox.showerror(
+                "Invalid subdomain limits",
+                f"{exc} Allowed limits are depth 1–8 and hosts 1–100. No scan was started.",
+            )
+            return
         if not messagebox.askyesno(
             "Confirm authorized testing",
             f"Start continuous, read-only web checks for:\n\n{target}\n\n"
             f"Authorized root hostname: {host}\n\n"
-            + (f"Recursive subdomain discovery: ENABLED (depth up to {self.subdomain_depth_var.get()}, up to {self.subdomain_hosts_var.get()} DNS-verified hosts; shared request/page budgets).\n\n" if self.include_subdomains_var.get() else "Subdomain discovery: disabled.\n\n")
+            + (f"Recursive subdomain discovery: ENABLED (depth up to {subdomain_depth}, up to {subdomain_host_limit} DNS-verified hosts; shared request/page budgets).\n\n" if self.include_subdomains_var.get() else "Subdomain discovery: disabled.\n\n")
             + ("NVD CVE identification: ENABLED (detected product versions are checked against the NVD database).\n\n" if self.cve_lookup_var.get() else "NVD CVE identification: disabled.\n\n")
             + "Only proceed if you have permission for the root host and, when enabled, the entire domain and all its subdomains. The app will keep checking until you stop it."
         ):
@@ -271,8 +288,8 @@ class DarthScannerApp:
             "root_domain": host if self.include_subdomains_var.get() else None,
             "max_pages": 30 if self.include_subdomains_var.get() else 12,
             "max_requests": 24,
-            "max_subdomain_depth": int(self.subdomain_depth_var.get()),
-            "max_subdomain_hosts": int(self.subdomain_hosts_var.get()),
+            "max_subdomain_depth": subdomain_depth,
+            "max_subdomain_hosts": subdomain_host_limit,
             "request_delay_seconds": 1.0,
             "timeout_seconds": 8,
         }
