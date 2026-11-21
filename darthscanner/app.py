@@ -576,7 +576,7 @@ class DarthScannerApp:
                 "#70d6b0")
         section("Evidence collected", item.get("evidence"), "#70d6b0")
         section("Safe proof of concept / reproduction steps",
-                "\\n".join(item.get("reproduction_steps") or []) or
+                "\n".join(item.get("reproduction_steps") or []) or
                 "No repeatable HTTP steps were generated for this finding.", "#70d6b0")
         evidence_details = item.get("evidence_details") or {}
         evidence_lines = [
