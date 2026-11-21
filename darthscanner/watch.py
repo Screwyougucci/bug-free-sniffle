@@ -95,7 +95,7 @@ def eligible_focuses(report: dict) -> list[str]:
         return ["headers", "fingerprint"]
     page = pages[0]
     signals = set(discover_signals(report))
-    eligible = ["headers", "fingerprint"]
+    eligible = ["headers"]
     if "cookie_present" in signals:
         eligible.append("cookies")
     if "cors_present" in signals:
@@ -107,6 +107,7 @@ def eligible_focuses(report: dict) -> list[str]:
     if "scripts_present" in signals or "javascript_content" in signals:
         eligible.append("javascript")
     # Keep ordering stable and remove accidental duplicates.
+    eligible.append("fingerprint")
     return list(dict.fromkeys(item for item in eligible if item in FOCUSES))
 
 
@@ -125,8 +126,6 @@ def _focus_score(focus: str, history: dict, signals: set[str], cycle: int) -> fl
     for signal, related in _SIGNAL_FOCUS.items():
         if focus in related and signal in signals:
             score += 5.0
-    # Small deterministic tie-breaker; it does not override evidence or learning.
-    score += ((cycle + FOCUSES.index(focus)) % len(FOCUSES)) / 100.0
     return score
 
 
@@ -147,6 +146,8 @@ def choose_next_focus(
         choices = ["headers", "fingerprint"]
     remaining = [item for item in choices if item not in set(completed)]
     pool = remaining or choices
+    if not history and not signals:
+        return pool[0]
     return max(pool, key=lambda item: _focus_score(item, history, signal_set, cycle))
 
 
