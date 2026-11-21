@@ -93,7 +93,8 @@ def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
                   findings: list, software: list[dict] | None = None,
                   fuzz_observations: list[dict] | None = None,
                   exposure_paths_checked: int = 0, tls_probes: int = 0,
-                  source_files_reviewed: int = 0, source_files_skipped: int = 0) -> dict:
+                  source_files_reviewed: int = 0, source_files_skipped: int = 0,
+                  cve_lookup_status: dict | None = None) -> dict:
     """Write the single Notepad-friendly JSON report."""
     return write_report(
         args.output,
