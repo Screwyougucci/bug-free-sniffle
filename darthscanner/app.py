@@ -26,6 +26,23 @@ APP_NAME = "Darth Scanner"
 MIN_INTERVAL = 30
 
 
+def _enable_windows_dpi_awareness() -> None:
+    """Ask Windows for per-monitor DPI rendering before creating Tk windows."""
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        # PROCESS_PER_MONITOR_DPI_AWARE = 2. Prefer the modern API.
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        except (AttributeError, OSError):
+            # Fallback for older Windows versions.
+            ctypes.windll.user32.SetProcessDPIAware()
+    except (AttributeError, OSError):
+        # Keep the app usable on systems where DPI APIs are unavailable.
+        pass
+
+
 class _QueueWriter:
     """Send scanner output to the in-app activity feed instead of a terminal."""
     def __init__(self, events: queue.Queue):
@@ -183,11 +200,11 @@ class DarthScannerApp:
         tk.Button(title_row, text="OPEN DATA FOLDER", command=self.open_data_folder, bg="#253247",
                   fg="white", relief="flat", padx=10, pady=4).pack(side="right", padx=6)
 
-        columns = ("status", "severity", "title", "finding_id", "occurrences", "last_seen")
+        columns = ("status", "severity", "cvss", "title", "finding_id", "occurrences", "last_seen")
         self.table = ttk.Treeview(findings_panel, columns=columns, show="headings", height=8)
-        widths = {"status": 95, "severity": 80, "title": 320, "finding_id": 190,
+        widths = {"status": 95, "severity": 80, "cvss": 100, "title": 300, "finding_id": 190,
                   "occurrences": 85, "last_seen": 155}
-        labels = {"status": "STATUS", "severity": "SEVERITY", "title": "DISCOVERY",
+        labels = {"status": "STATUS", "severity": "SEVERITY", "cvss": "CVSS", "title": "DISCOVERY",
                   "finding_id": "FINDING ID", "occurrences": "SEEN", "last_seen": "LAST SEEN"}
         for col in columns:
             self.table.heading(col, text=labels[col])
@@ -389,6 +406,7 @@ class DarthScannerApp:
             self.table.insert("", "end", values=(
                 str(item.get("status", "")).upper(),
                 str(item.get("severity", "n/a")).upper(),
+                (f"{float(item['cvss_score']):.1f}" if isinstance(item.get("cvss_score"), (int, float)) else "N/A"),
                 item.get("title", "Untitled"),
                 item.get("finding_id", ""),
                 item.get("occurrences", 0),
@@ -539,6 +557,7 @@ class DarthScannerApp:
         cvss = item.get("cvss_score")
         cvss_text = f"CVSS {item.get('cvss_version') or ''} {cvss}/10".strip() if cvss is not None else "Not scored"
         section("CVSS severity score", cvss_text, "#f4c66b")
+        section("CVSS vector", item.get("cvss_vector") or "Not supplied by the NVD record.", "#f4c66b")
         section("Affected software component", item.get("affected_component"))
         section("CVE references", "\n".join(item.get("references") or []), "#8fc5ff")
         section("What the scanner detected", item.get("description"))
@@ -607,7 +626,16 @@ class DarthScannerApp:
 
 
 def main():
+    _enable_windows_dpi_awareness()
     root = tk.Tk()
+    try:
+        # Tk uses points for fonts. Match its point-to-pixel scale to the
+        # monitor DPI so text stays crisp instead of being bitmap-stretched.
+        dpi = float(root.winfo_fpixels("1i"))
+        if dpi > 0:
+            root.tk.call("tk", "scaling", dpi / 72.0)
+    except (tk.TclError, ValueError, TypeError):
+        pass
     DarthScannerApp(root)
     root.mainloop()
 
