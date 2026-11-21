@@ -20,7 +20,7 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
                  exposure_paths_checked: int = 0,
                  tls_probes: int = 0,
                  source_files_reviewed: int = 0,
-                 source_files_skipped: int = 0) -> dict:
+                 source_files_skipped: int = 0,\n                 cve_lookup_status: dict | None = None) -> dict:
     """Normalize, deduplicate, sort, and summarize scan results."""
     unique = {}
     for item in findings:
@@ -71,7 +71,7 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
             "cve_matches": len(cve_findings),
             "fuzz_anomalies": sum("no notable" not in item.get("note", "") for item in (fuzz_observations or [])),
         },
-        "software_components": software_components or [],
+        "software_components": software_components or [],\n        "cve_lookup": cve_lookup_status or {"source": "NVD CVE API 2.0", "status": "not run"},
         "pages": pages,
         "findings": [{**item.to_dict(), **finding_identity(item.to_dict())} for item in normalized],
         "identity": report_identity(target, pages),
@@ -92,7 +92,7 @@ def write_report(path: str, *, target: str, requests_made: int,
                  exposure_paths_checked: int = 0,
                  tls_probes: int = 0,
                  source_files_reviewed: int = 0,
-                 source_files_skipped: int = 0) -> dict:
+                 source_files_skipped: int = 0,\n                 cve_lookup_status: dict | None = None) -> dict:
     payload = build_report(
         target=target,
         requests_made=requests_made,
