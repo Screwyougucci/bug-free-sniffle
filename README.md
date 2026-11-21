@@ -4,7 +4,7 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.8.1 capabilities
+## Version 0.9.1 capabilities
 
 Version 0.8.0 adds content-aware adaptive watch. Version 0.8.1 adds persistent discovery identities: stable target, resource, behavior, evidence, test, and finding IDs, plus lifecycle tracking for new, recurring, changed, and resolved findings. Watch history stores only metadata and finding evidence summaries, not response bodies, cookies, or credentials. A finding is marked resolved only after a complete applicable check round finishes without observing it. It selects one focused analysis per cycle, learns which checks apply from response metadata, remembers completed checks and unique finding IDs, and resets its check queue when the response changes. It stays on the exact authorized target and uses only the bounded web GET/crawl path; it does not rotate into host-wide TLS, HTTP-method, or sensitive-path probes. The minimum watch interval is 30 seconds.
 
@@ -113,14 +113,11 @@ Darth Scanner 0.9.0 includes a persistent local desktop dashboard. It lets you e
 
 The app prompts you to confirm that you own the site or have explicit permission before starting. It creates a separate local scope for the exact hostname entered (not its subdomains), uses bounded read-only web checks, and keeps reports/history under `%LOCALAPPDATA%\\DarthScanner`. Continuous watch runs until you press **STOP** or close the app. The minimum interval is 30 seconds. Entering a URL does not itself grant permission to scan it.
 
-### Launch on Windows
+### Standalone Windows executable
 
-```powershell
-py -3 -m pip install -e .
-darth-scanner-app
-```
+A Windows x64 portable build is produced by the `Windows desktop build` GitHub Actions workflow. Download `DarthScanner-Windows-x64.zip` from the repository's Releases page, extract the entire ZIP, and run `DarthScanner.exe`. Keep `DarthScannerEngine.exe` beside it; the GUI launches that bundled engine for watch cycles. No Python installation is required. The app stores reports and history under `%LOCALAPPDATA%\\DarthScanner`. The first run may show a Windows SmartScreen warning because the executable is not code-signed; only run builds downloaded from this repository. The workflow also retains a downloadable Actions artifact for 90 days. Tagged GitHub Releases are the persistent download location.
 
-If Windows reports that Tkinter is unavailable, install/use a standard Python distribution that includes Tcl/Tk.
+For running from source instead, install with `py -3 -m pip install -e .` and launch `darth-scanner-app`.
 
 ## Install
 

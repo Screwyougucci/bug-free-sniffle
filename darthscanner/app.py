@@ -215,14 +215,20 @@ class DarthScannerApp:
         self.worker.start()
 
     def _run_process(self, target: str, scope_path: Path, output_dir: Path):
-        command = [
-            sys.executable, "-m", "darthscanner", "watch",
+        # In a PyInstaller build, run the bundled console engine beside the GUI.
+        # In a source install, keep using the active Python interpreter.
+        if getattr(sys, "frozen", False):
+            engine = Path(sys.executable).with_name("DarthScannerEngine.exe")
+            command = [str(engine), "watch"]
+        else:
+            command = [sys.executable, "-m", "darthscanner", "watch"]
+        command.extend([
             "--target", target,
             "--scope", str(scope_path),
             "--acknowledge-authorization",
             "--output-dir", str(output_dir),
             "--interval", str(MIN_INTERVAL),
-        ]
+        ])
         try:
             process = subprocess.Popen(
                 command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
