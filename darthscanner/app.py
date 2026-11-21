@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
 import queue
 import subprocess
@@ -17,10 +18,26 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 from .identity import target_id, resource_id
 from .app_utils import parse_target_url
+from .watch import run_watch
 
 
 APP_NAME = "Darth Scanner"
 MIN_INTERVAL = 30
+
+
+class _QueueWriter:
+    """Send scanner output to the in-app activity feed instead of a terminal."""
+    def __init__(self, events: queue.Queue):
+        self.events = events
+
+    def write(self, value: str) -> int:
+        for line in value.splitlines():
+            if line.strip():
+                self.events.put(("log", line.rstrip()))
+        return len(value)
+
+    def flush(self) -> None:
+        return None
 
 
 def app_data_dir() -> Path:
@@ -33,12 +50,12 @@ def app_data_dir() -> Path:
 class DarthScannerApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Darth Scanner — Discovery Command")
-        self.root.geometry("1120x760")
-        self.root.minsize(900, 620)
-        self.root.configure(bg="#101116")
+        self.root.title("Darth Scanner")
+        self.root.geometry("1240x820")
+        self.root.minsize(980, 680)
+        self.root.configure(bg="#0b0e14")
         self.events: queue.Queue[tuple[str, str]] = queue.Queue()
-        self.process: subprocess.Popen | None = None
+        self.stop_event = threading.Event()
         self.worker: threading.Thread | None = None
         self.current_folder: Path | None = None
         self.current_target: str | None = None
@@ -51,44 +68,45 @@ class DarthScannerApp:
     def _style(self):
         style = ttk.Style()
         style.theme_use("clam")
-        style.configure("Treeview", background="#191b23", foreground="#e7e8ed",
-                        fieldbackground="#191b23", rowheight=27, borderwidth=0)
-        style.configure("Treeview.Heading", background="#262936", foreground="#f4f4f6",
-                        relief="flat", font=("Segoe UI", 9, "bold"))
-        style.map("Treeview", background=[("selected", "#343b52")])
+        style.configure("Treeview", background="#151d2a", foreground="#e8edf5",
+                        fieldbackground="#151d2a", rowheight=34, borderwidth=0,
+                        font=("Segoe UI", 9))
+        style.configure("Treeview.Heading", background="#253247", foreground="#f3f6fb",
+                        relief="flat", padding=(9, 10), font=("Segoe UI", 9, "bold"))
+        style.map("Treeview", background=[("selected", "#34465f")], foreground=[("selected", "#ffffff")])
         style.configure("TCombobox", fieldbackground="#20232c", foreground="#f4f4f6")
 
     def _build(self):
-        header = tk.Frame(self.root, bg="#171922", padx=22, pady=16)
+        header = tk.Frame(self.root, bg="#111722", padx=22, pady=16)
         header.pack(fill="x")
-        tk.Label(header, text="DARTH SCANNER", bg="#171922", fg="#f5f5f7",
+        tk.Label(header, text="DARTH SCANNER", bg="#111722", fg="#f7f9fc",
                  font=("Segoe UI", 20, "bold")).pack(side="left")
         tk.Label(header, text="DISCOVERY COMMAND  •  LOCAL WORKSPACE",
-                 bg="#171922", fg="#a5a9b8", font=("Segoe UI", 9)).pack(side="left", padx=18, pady=(7, 0))
-        self.status = tk.Label(header, text="● IDLE", bg="#171922", fg="#a8adb9",
+                 bg="#111722", fg="#a5a9b8", font=("Segoe UI", 9)).pack(side="left", padx=18, pady=(7, 0))
+        self.status = tk.Label(header, text="● IDLE", bg="#111722", fg="#a8adb9",
                                font=("Segoe UI", 9, "bold"))
         self.status.pack(side="right", pady=(7, 0))
 
-        main = tk.Frame(self.root, bg="#101116", padx=20, pady=16)
+        main = tk.Frame(self.root, bg="#0b0e14", padx=20, pady=16)
         main.pack(fill="both", expand=True)
 
-        target_panel = tk.Frame(main, bg="#191b23", padx=15, pady=13)
+        target_panel = tk.Frame(main, bg="#151d2a", padx=15, pady=13)
         target_panel.pack(fill="x")
-        tk.Label(target_panel, text="TARGET WEBSITE", bg="#191b23", fg="#f1f2f5",
+        tk.Label(target_panel, text="TARGET WEBSITE", bg="#151d2a", fg="#f3f6fb",
                  font=("Segoe UI", 10, "bold")).pack(anchor="w")
-        entry_row = tk.Frame(target_panel, bg="#191b23")
+        entry_row = tk.Frame(target_panel, bg="#151d2a")
         entry_row.pack(fill="x", pady=(8, 5))
         self.url_var = tk.StringVar()
-        self.url_entry = tk.Entry(entry_row, textvariable=self.url_var, bg="#252833",
-                                  fg="#f5f5f7", insertbackground="white", relief="flat",
+        self.url_entry = tk.Entry(entry_row, textvariable=self.url_var, bg="#202a3a",
+                                  fg="#f7f9fc", insertbackground="white", relief="flat",
                                   font=("Consolas", 11))
         self.url_entry.pack(side="left", fill="x", expand=True, ipady=9, padx=(0, 9))
         self.start_button = tk.Button(entry_row, text="START WATCH", command=self.start_watch,
-                                      bg="#8d1e2d", fg="white", activebackground="#a52b3c",
+                                      bg="#c0263d", fg="white", activebackground="#e03b55",
                                       relief="flat", padx=17, pady=8, font=("Segoe UI", 9, "bold"))
         self.start_button.pack(side="left", padx=3)
         self.stop_button = tk.Button(entry_row, text="STOP", command=self.stop_watch,
-                                     bg="#343744", fg="white", activebackground="#45495a",
+                                     bg="#263447", fg="white", activebackground="#45495a",
                                      relief="flat", padx=17, pady=8, font=("Segoe UI", 9, "bold"),
                                      state="disabled")
         self.stop_button.pack(side="left", padx=3)
@@ -96,39 +114,39 @@ class DarthScannerApp:
         tk.Checkbutton(
             target_panel,
             text="I own this website or have explicit permission to run security checks against it.",
-            variable=self.authorized_var, bg="#191b23", fg="#d7d9e0",
-            activebackground="#191b23", activeforeground="white", selectcolor="#252833",
+            variable=self.authorized_var, bg="#151d2a", fg="#d7d9e0",
+            activebackground="#151d2a", activeforeground="white", selectcolor="#202a3a",
             font=("Segoe UI", 9),
         ).pack(anchor="w", pady=(4, 0))
         tk.Label(target_panel, text="The app only adds the exact hostname you enter to this target's scope. It does not authorize other subdomains.",
-                 bg="#191b23", fg="#9da2b1", font=("Segoe UI", 8)).pack(anchor="w", pady=(5, 0))
+                 bg="#151d2a", fg="#9eabc0", font=("Segoe UI", 8)).pack(anchor="w", pady=(5, 0))
 
-        stats = tk.Frame(main, bg="#101116")
+        stats = tk.Frame(main, bg="#0b0e14")
         stats.pack(fill="x", pady=12)
         self.stat_vars = {}
         for key, label in [("total", "UNIQUE FINDINGS"), ("new", "NEW"), ("recurring", "RECURRING"),
                            ("changed", "CHANGED"), ("resolved", "RESOLVED"), ("cycles", "SCAN CYCLES")]:
-            card = tk.Frame(stats, bg="#191b23", padx=13, pady=10)
+            card = tk.Frame(stats, bg="#151d2a", padx=13, pady=10)
             card.pack(side="left", fill="x", expand=True, padx=(0, 7))
-            tk.Label(card, text=label, bg="#191b23", fg="#9da2b1",
+            tk.Label(card, text=label, bg="#151d2a", fg="#9eabc0",
                      font=("Segoe UI", 8, "bold")).pack(anchor="w")
             var = tk.StringVar(value="0")
             self.stat_vars[key] = var
-            tk.Label(card, textvariable=var, bg="#191b23", fg="#f4f4f6",
+            tk.Label(card, textvariable=var, bg="#151d2a", fg="#f4f4f6",
                      font=("Segoe UI", 18, "bold")).pack(anchor="w", pady=(3, 0))
 
-        split = tk.PanedWindow(main, orient="vertical", bg="#101116", sashwidth=6,
+        split = tk.PanedWindow(main, orient="vertical", bg="#0b0e14", sashwidth=6,
                                sashrelief="flat", bd=0)
         split.pack(fill="both", expand=True)
-        findings_panel = tk.Frame(split, bg="#191b23", padx=12, pady=10)
+        findings_panel = tk.Frame(split, bg="#151d2a", padx=12, pady=10)
         split.add(findings_panel, minsize=190)
-        title_row = tk.Frame(findings_panel, bg="#191b23")
+        title_row = tk.Frame(findings_panel, bg="#151d2a")
         title_row.pack(fill="x", pady=(0, 8))
-        tk.Label(title_row, text="DISCOVERY REGISTRY", bg="#191b23", fg="#f1f2f5",
+        tk.Label(title_row, text="DISCOVERY REGISTRY", bg="#151d2a", fg="#f3f6fb",
                  font=("Segoe UI", 10, "bold")).pack(side="left")
-        tk.Button(title_row, text="REFRESH", command=self.refresh_dashboard, bg="#303442",
+        tk.Button(title_row, text="REFRESH", command=self.refresh_dashboard, bg="#253247",
                   fg="white", relief="flat", padx=10, pady=4).pack(side="right")
-        tk.Button(title_row, text="OPEN DATA FOLDER", command=self.open_data_folder, bg="#303442",
+        tk.Button(title_row, text="OPEN DATA FOLDER", command=self.open_data_folder, bg="#253247",
                   fg="white", relief="flat", padx=10, pady=4).pack(side="right", padx=6)
 
         columns = ("status", "severity", "title", "finding_id", "occurrences", "last_seen")
@@ -143,16 +161,16 @@ class DarthScannerApp:
         self.table.pack(fill="both", expand=True)
         self.table.bind("<Double-1>", self.show_finding_details)
 
-        log_panel = tk.Frame(split, bg="#191b23", padx=12, pady=10)
+        log_panel = tk.Frame(split, bg="#151d2a", padx=12, pady=10)
         split.add(log_panel, minsize=130)
-        tk.Label(log_panel, text="LIVE ACTIVITY", bg="#191b23", fg="#f1f2f5",
+        tk.Label(log_panel, text="LIVE ACTIVITY", bg="#151d2a", fg="#f3f6fb",
                  font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(0, 7))
-        self.log = tk.Text(log_panel, height=7, bg="#11131a", fg="#cbd0dc",
+        self.log = tk.Text(log_panel, height=7, bg="#0c121c", fg="#cbd0dc",
                            insertbackground="white", relief="flat", wrap="word",
                            font=("Consolas", 9), state="disabled")
         self.log.pack(fill="both", expand=True)
         footer = tk.Label(main, text="Local-only dashboard • History persists between launches • Continuous watch stops when you press STOP or close the app",
-                          bg="#101116", fg="#818696", font=("Segoe UI", 8))
+                          bg="#0b0e14", fg="#8995a8", font=("Segoe UI", 8))
         footer.pack(anchor="w", pady=(8, 0))
 
     def _log(self, message: str):
@@ -168,7 +186,7 @@ class DarthScannerApp:
         self.stop_button.configure(state="normal" if running else "disabled")
 
     def start_watch(self):
-        if self.process is not None and self.process.poll() is None:
+        if self.worker is not None and self.worker.is_alive():
             return
         if not self.authorized_var.get():
             messagebox.showwarning("Authorization required",
@@ -206,6 +224,7 @@ class DarthScannerApp:
         self.url_var.set(target)
         self._log(f"Starting authorized watch: {target}")
         self._log(f"Persistent data: {output_dir}")
+        self.stop_event.clear()
         self._set_running(True)
         self.worker = threading.Thread(
             target=self._run_process,
@@ -215,51 +234,27 @@ class DarthScannerApp:
         self.worker.start()
 
     def _run_process(self, target: str, scope_path: Path, output_dir: Path):
-        # In a PyInstaller build, run the bundled console engine beside the GUI.
-        # In a source install, keep using the active Python interpreter.
-        if getattr(sys, "frozen", False):
-            engine = Path(sys.executable).with_name("DarthScannerEngine.exe")
-            command = [str(engine), "watch"]
-        else:
-            command = [sys.executable, "-m", "darthscanner", "watch"]
-        command.extend([
-            "--target", target,
-            "--scope", str(scope_path),
-            "--acknowledge-authorization",
-            "--output-dir", str(output_dir),
-            "--interval", str(MIN_INTERVAL),
-        ])
+        """Run the scheduler in this app process and stream all output into the UI."""
+        writer = _QueueWriter(self.events)
         try:
-            process = subprocess.Popen(
-                command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, encoding="utf-8", errors="replace", bufsize=1,
-            )
-            self.process = process
-            assert process.stdout is not None
-            for line in process.stdout:
-                self.events.put(("log", line.rstrip()))
-            code = process.wait()
-            self.events.put(("exit", f"Watch process ended (exit code {code})."))
+            with redirect_stdout(writer), redirect_stderr(writer):
+                code = run_watch(
+                    target=target,
+                    scope_path=str(scope_path),
+                    acknowledge_authorization=True,
+                    output_dir=str(output_dir),
+                    interval=MIN_INTERVAL,
+                    stop_event=self.stop_event,
+                )
+            self.events.put(("exit", f"Watch stopped (status {code})."))
         except Exception as exc:
-            self.events.put(("exit", f"Could not start scanner: {exc}"))
-
-    def _terminate_process_tree(self, process):
-        if process is None or process.poll() is not None:
-            return
-        if sys.platform == "win32":
-            subprocess.run(
-                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
-            )
-        else:
-            process.terminate()
+            self.events.put(("exit", f"Scanner error: {exc}"))
 
     def stop_watch(self):
-        process = self.process
-        if process is not None and process.poll() is None:
-            self._log("Stopping watch...")
-            self._terminate_process_tree(process)
-        self._set_running(False)
+        if self.worker is not None and self.worker.is_alive():
+            self._log("Stop requested — finishing the current bounded check...")
+            self.stop_event.set()
+            self.stop_button.configure(state="disabled", text="STOPPING…")
 
     def _poll_events(self):
         try:
@@ -271,8 +266,9 @@ class DarthScannerApp:
                         self.refresh_dashboard()
                 else:
                     self._log(message)
-                    self.process = None
+                    self.worker = None
                     self._set_running(False)
+                    self.stop_button.configure(text="STOP", state="disabled")
                     self.refresh_dashboard()
         except queue.Empty:
             pass
@@ -337,8 +333,8 @@ class DarthScannerApp:
         detail = tk.Toplevel(self.root)
         detail.title("Discovery details")
         detail.geometry("720x520")
-        detail.configure(bg="#191b23")
-        body = tk.Text(detail, bg="#11131a", fg="#e7e8ed", insertbackground="white",
+        detail.configure(bg="#151d2a")
+        body = tk.Text(detail, bg="#0c121c", fg="#e8edf5", insertbackground="white",
                        relief="flat", wrap="word", padx=14, pady=12, font=("Consolas", 9))
         body.pack(fill="both", expand=True, padx=12, pady=12)
         fields = [
@@ -364,11 +360,11 @@ class DarthScannerApp:
             subprocess.Popen(["xdg-open", str(folder)])
 
     def _on_close(self):
-        process = self.process
-        if process is not None and process.poll() is None:
-            if not messagebox.askyesno("Stop scanner?", "Stop the active watch and close Darth Scanner?"):
+        worker_running = self.worker is not None and self.worker.is_alive()
+        if worker_running:
+            if not messagebox.askyesno("Stop scanner?", "Stop the active check and close Darth Scanner?"):
                 return
-            self._terminate_process_tree(process)
+            self.stop_event.set()
         self.root.destroy()
 
 
