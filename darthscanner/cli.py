@@ -24,7 +24,7 @@ from .scope import ScopeError, load_scope, require_authorization
 from .source_audit import audit_python_source
 from .tls_checks import inspect_tls
 from .watch import run_watch
-from .subdomains import discover_subdomains
+from .subdomains import discover_subdomain_tree
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -94,7 +94,8 @@ def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
                   fuzz_observations: list[dict] | None = None,
                   exposure_paths_checked: int = 0, tls_probes: int = 0,
                   source_files_reviewed: int = 0, source_files_skipped: int = 0,
-                  cve_lookup_status: dict | None = None) -> dict:
+                  cve_lookup_status: dict | None = None,
+                  domain_discovery: dict | None = None) -> dict:
     """Write the single Notepad-friendly JSON report."""
     return write_report(
         args.output,
@@ -109,6 +110,7 @@ def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
         source_files_reviewed=source_files_reviewed,
         source_files_skipped=source_files_skipped,
         cve_lookup_status=cve_lookup_status,
+        domain_discovery=domain_discovery,
     )
 
 def main(argv: list[str] | None = None) -> int:
@@ -166,14 +168,22 @@ def main(argv: list[str] | None = None) -> int:
             discovered_subdomains = []
             if profile in {"full", "web"}:
                 if scope.include_subdomains:
-                    discovered_subdomains = discover_subdomains(scope.root_domain or "")
-                    print(f"Passive subdomain discovery found {len(discovered_subdomains)} candidate host(s).")
-                    for host in discovered_subdomains:
-                        print(f"  Subdomain candidate: {host}")
-                    print("Candidates are certificate-transparency names; active checks remain within the confirmed root-domain scope.")
+                    discovered_subdomains = discover_subdomain_tree(
+                        scope.root_domain or "",
+                        max_depth=scope.max_subdomain_depth,
+                        limit=scope.max_subdomain_hosts,
+                        timeout=scope.timeout_seconds,
+                    )
+                    print(
+                        f"Recursive passive discovery found {len(discovered_subdomains)} DNS-verified host(s) "
+                        f"(depth <= {scope.max_subdomain_depth}, host limit {scope.max_subdomain_hosts})."
+                    )
+                    for item in discovered_subdomains:
+                        print(f"  {'  ' * max(0, item['depth'] - 1)}└─ {item['host']} (depth {item['depth']})")
+                    print("Names are CT candidates verified by public DNS; active checks remain inside the authorized root-domain boundary.")
                 host_targets = [args.target]
                 scheme = urlsplit(args.target).scheme.lower()
-                host_targets.extend(f"{scheme}://{host}/" for host in discovered_subdomains)
+                host_targets.extend(f"{scheme}://{item['host']}/" for item in discovered_subdomains)
                 for host_target in host_targets:
                     remaining_pages = scope.max_pages - len(responses)
                     remaining_requests = client.max_requests - client.requests_made
@@ -308,6 +318,13 @@ def main(argv: list[str] | None = None) -> int:
                 pages=pages, findings=findings, software=software,
                 exposure_paths_checked=exposure_paths_checked, tls_probes=tls_probes,
                 cve_lookup_status=cve_lookup_status,
+                domain_discovery={
+                    "enabled": scope.include_subdomains,
+                    "root_domain": scope.root_domain,
+                    "max_depth": scope.max_subdomain_depth,
+                    "max_hosts": scope.max_subdomain_hosts,
+                    "hosts": discovered_subdomains,
+                },
             )
             print(f"Profile: {profile}; focus: {focus}. Reviewed {len(responses)} page/resource response(s) and {len(script_responses)} same-origin JavaScript file(s); {client.requests_made} HTTP request(s).")
             print(f"Exposure paths checked: {exposure_paths_checked}; TLS probes attempted: {tls_probes}.")

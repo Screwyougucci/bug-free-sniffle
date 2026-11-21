@@ -4,9 +4,9 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.12.0 capabilities
+## Version 0.13.0 capabilities
 
-Version 0.8.0 adds content-aware adaptive watch. Version 0.8.1 adds persistent discovery identities: stable target, resource, behavior, evidence, test, and finding IDs, plus lifecycle tracking for new, recurring, changed, and resolved findings. Watch history stores only metadata and finding evidence summaries, not response bodies, cookies, or credentials. A finding is marked resolved only after a complete applicable check round finishes without observing it. It selects one focused analysis per cycle, learns which checks apply from response metadata, remembers completed checks and unique finding IDs, and resets its check queue when the response changes. It stays on the exact authorized target and uses only the bounded web GET/crawl path; it does not rotate into host-wide TLS, HTTP-method, or sensitive-path probes. The minimum watch interval is 30 seconds.
+Version 0.13.0 adds recursive subdomain discovery with a domain tree and configurable bounds. Version 0.8.0 adds content-aware adaptive watch. Version 0.8.1 adds persistent discovery identities: stable target, resource, behavior, evidence, test, and finding IDs, plus lifecycle tracking for new, recurring, changed, and resolved findings. Watch history stores only metadata and finding evidence summaries, not response bodies, cookies, or credentials. A finding is marked resolved only after a complete applicable check round finishes without observing it. It selects one focused analysis per cycle, learns which checks apply from response metadata, remembers completed checks and unique finding IDs, and resets its check queue when the response changes. It stays on the exact authorized target and uses only the bounded web GET/crawl path; it does not rotate into host-wide TLS, HTTP-method, or sensitive-path probes. The minimum watch interval is 30 seconds.
 
 
 
@@ -98,7 +98,17 @@ These are heuristic findings, not confirmed zero-days. Static analysis cannot pr
 
 An unknown vulnerability can also be investigated through the bounded `fuzz` command on an explicitly authorized endpoint. It compares responses and flags behavior changes for manual review. This is black-box anomaly research, not coverage-guided binary fuzzing, and does not automatically exploit or prove a flaw.
 
-### 8. Browser-side XSS and source review indicators\n\nThe scanner passively inspects HTML already fetched by the bounded crawler. It looks for inline event handlers, `javascript:` URLs, source-and-sink co-occurrence in inline scripts (for example, browser-controlled URL sources alongside HTML-string sinks), and same-origin source-map references. It never executes JavaScript, injects payloads, or fetches source maps. These findings are review leads: co-occurrence is not proof of data flow or exploitable XSS.\n\n### 9. Detailed findings and JSON reporting
+### 8. Browser-side XSS and source review indicators\n\nThe scanner passively inspects HTML already fetched by the bounded crawler. It looks for inline event handlers, `javascript:` URLs, source-and-sink co-occurrence in inline scripts (for example, browser-controlled URL sources alongside HTML-string sinks), and same-origin source-map references. It never executes JavaScript, injects payloads, or fetches source maps. These findings are review leads: co-occurrence is not proof of data flow or exploitable XSS.\n\n### 9. Recursive subdomain discovery
+
+- Opt-in passive Certificate Transparency discovery using crt.sh, expanded breadth-first across nested labels (for example, `api.shop.example.com`).
+- Configurable maximum depth (1–8, default 5) and DNS-verified host count (1–100, default 25).
+- Each discovered hostname must resolve exclusively to globally routable addresses before it is accepted as a candidate.
+- The report records each hostname, depth, nearest discovered parent, and DNS verification status; the desktop app provides a Domain Tree view.
+- A 15-minute in-process cache avoids repeating the same CT queries on every adaptive watch cycle. Active HTTP checks still share the existing request/page budgets and require authorization for the entire root domain and all its subdomains.
+
+CT/DNS discovery is not proof of ownership. Names are candidates, DNS can change, and the user must have authorization for the entire root-domain boundary before enabling active checks.
+
+### 10. Detailed findings and JSON reporting
 
 Every finding can include:
 - Stable finding ID plus separate target, resource, behavior, evidence, and test IDs.
