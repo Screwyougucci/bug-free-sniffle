@@ -48,7 +48,7 @@ def finding_identity(finding: dict) -> dict:
         "finding_id": legacy_id,
         "resource_id": resource_id(url),
         "behavior_id": _digest("beh", url, category, title),
-        "evidence_id": _digest("evd", legacy_id, str(finding.get("evidence", ""))),
+        "evidence_id": _digest("evd", legacy_id, str(finding.get("evidence", "")), str(finding.get("source_excerpt", ""))),
         "test_id": _digest("tst", category, kind),
     }
 
@@ -89,6 +89,7 @@ def update_finding_registry(
             str(finding.get("severity", "")),
             str(finding.get("title", "")),
             str(finding.get("evidence", "")),
+            str(finding.get("source_excerpt", "")),
             str(finding.get("remediation", "")),
         )
         previous = registry.get(fid)
@@ -106,6 +107,8 @@ def update_finding_registry(
                 "url": url,
                 "description": str(finding.get("description", "")),
                 "evidence": str(finding.get("evidence", "")),
+                "source_excerpt": finding.get("source_excerpt"),
+                "source_line": finding.get("source_line"),
                 "remediation": str(finding.get("remediation", "")),
             }
             newly_seen.append(fid)
@@ -129,6 +132,8 @@ def update_finding_registry(
                 "url": url,
                 "description": str(finding.get("description", entry.get("description", ""))),
                 "evidence": str(finding.get("evidence", entry.get("evidence", ""))),
+                "source_excerpt": finding.get("source_excerpt", entry.get("source_excerpt")),
+                "source_line": finding.get("source_line", entry.get("source_line")),
                 "remediation": str(finding.get("remediation", entry.get("remediation", ""))),
             })
         registry[fid] = entry

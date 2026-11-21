@@ -23,6 +23,7 @@ from .scope import ScopeError, load_scope, require_authorization
 from .source_audit import audit_python_source
 from .tls_checks import inspect_tls
 from .watch import run_watch
+from .subdomains import discover_subdomains
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -156,7 +157,28 @@ def main(argv: list[str] | None = None) -> int:
             scope.validate_url(args.target)
             client = SafeHttpClient(scope)
             profile = args.profile
-            responses = crawl(args.target, scope, client) if profile in {"full", "web"} else []
+            responses = []
+            discovered_subdomains = []
+            if profile in {"full", "web"}:
+                if scope.include_subdomains:
+                    discovered_subdomains = discover_subdomains(scope.root_domain or "")
+                    print(f"Passive subdomain discovery found {len(discovered_subdomains)} candidate host(s).")
+                    for host in discovered_subdomains:
+                        print(f"  Subdomain candidate: {host}")
+                    print("Candidates are certificate-transparency names; active checks remain within the confirmed root-domain scope.")
+                host_targets = [args.target]
+                scheme = urlsplit(args.target).scheme.lower()
+                host_targets.extend(f"{scheme}://{host}/" for host in discovered_subdomains)
+                for host_target in host_targets:
+                    remaining_pages = scope.max_pages - len(responses)
+                    remaining_requests = client.max_requests - client.requests_made
+                    if remaining_pages <= 0 or remaining_requests <= 0:
+                        break
+                    try:
+                        scope.validate_url(host_target)
+                    except ScopeError:
+                        continue
+                    responses.extend(crawl(host_target, scope, client, max_pages=remaining_pages))
             findings = []
             components_by_cpe = {}
             script_urls = []

@@ -114,6 +114,7 @@ class DarthScannerApp:
                                      state="disabled")
         self.stop_button.pack(side="left", padx=3)
         self.authorized_var = tk.BooleanVar(value=False)
+        self.include_subdomains_var = tk.BooleanVar(value=False)
         tk.Checkbutton(
             target_panel,
             text="I own this website or have explicit permission to run security checks against it.",
@@ -121,7 +122,14 @@ class DarthScannerApp:
             activebackground="#151d2a", activeforeground="white", selectcolor="#202a3a",
             font=("Segoe UI", 9),
         ).pack(anchor="w", pady=(4, 0))
-        tk.Label(target_panel, text="The app only adds the exact hostname you enter to this target's scope. It does not authorize other subdomains.",
+        tk.Checkbutton(
+            target_panel,
+            text="Include subdomains (passive discovery, then bounded read-only checks)",
+            variable=self.include_subdomains_var, bg="#151d2a", fg="#d7d9e0",
+            activebackground="#151d2a", activeforeground="white", selectcolor="#202a3a",
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(6, 0))
+        tk.Label(target_panel, text="For subdomain mode, enter the root/apex domain (example.com, not www.example.com). You must be authorized for the entire domain and all its subdomains.",
                  bg="#151d2a", fg="#9eabc0", font=("Segoe UI", 8)).pack(anchor="w", pady=(5, 0))
 
         stats = tk.Frame(main, bg="#0b0e14")
@@ -204,8 +212,9 @@ class DarthScannerApp:
         if not messagebox.askyesno(
             "Confirm authorized testing",
             f"Start continuous, read-only web checks for:\n\n{target}\n\n"
-            f"Exact allowed hostname: {host}\n\n"
-            "Only proceed if you have permission. The app will keep checking until you stop it."
+            f"Authorized root hostname: {host}\n\n"
+            + ("Subdomain discovery and checks: ENABLED (up to 25 discovered hosts; shared request/page budgets).\n\n" if self.include_subdomains_var.get() else "Subdomain discovery: disabled.\n\n")
+            + "Only proceed if you have permission for the root host and, when enabled, the entire domain and all its subdomains. The app will keep checking until you stop it."
         ):
             return
 
@@ -217,7 +226,9 @@ class DarthScannerApp:
         scope = {
             "authorized": True,
             "allowed_hosts": [host],
-            "max_pages": 12,
+            "include_subdomains": bool(self.include_subdomains_var.get()),
+            "root_domain": host if self.include_subdomains_var.get() else None,
+            "max_pages": 30 if self.include_subdomains_var.get() else 12,
             "max_requests": 24,
             "request_delay_seconds": 1.0,
             "timeout_seconds": 8,
@@ -231,6 +242,8 @@ class DarthScannerApp:
         self._clear_dashboard()
         self.refresh_dashboard()
         self._log(f"Starting authorized watch: {target}")
+        if self.include_subdomains_var.get():
+            self._log(f"Subdomain mode enabled for {host}; discovery is passive and checks are bounded.")
         self._log(f"Persistent data: {output_dir}")
         self.stop_event.clear()
         self._set_running(True)
@@ -445,6 +458,11 @@ class DarthScannerApp:
         section("Why this may matter", item.get("impact") or
                 "This is an automated observation, not proof of exploitability. Review the evidence and affected component in context before treating it as a vulnerability.",
                 "#f4c66b")
+        section("Exact source code / response snippet",
+                (f"Line {item.get('source_line')}:\n" if item.get("source_line") else "")
+                + (item.get("source_excerpt") or
+                   "No source-code snippet applies to this finding. The evidence is based on response headers or metadata."),
+                "#70d6b0")
         section("Evidence collected", item.get("evidence"), "#70d6b0")
         section("Recommended remediation", item.get("remediation"))
         section("Affected URL", item.get("url"))

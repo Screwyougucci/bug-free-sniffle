@@ -29,7 +29,7 @@ def _origin(url: str) -> tuple[str, str, int | None]:
     return parts.scheme, (parts.hostname or "").lower(), parts.port or default_port
 
 
-def crawl(start_url: str, scope: Scope, client: SafeHttpClient) -> list[HttpResponse]:
+def crawl(start_url: str, scope: Scope, client: SafeHttpClient, max_pages: int | None = None) -> list[HttpResponse]:
     scope.validate_url(start_url)
     start_url = urldefrag(start_url)[0]
     origin = _origin(start_url)
@@ -37,7 +37,8 @@ def crawl(start_url: str, scope: Scope, client: SafeHttpClient) -> list[HttpResp
     seen: set[str] = set()
     responses: list[HttpResponse] = []
 
-    while queue and len(responses) < scope.max_pages and client.requests_made < client.max_requests:
+    page_limit = min(scope.max_pages, max_pages) if max_pages is not None else scope.max_pages
+    while queue and len(responses) < page_limit and client.requests_made < client.max_requests:
         url = queue.popleft()
         if url in seen:
             continue
@@ -61,7 +62,7 @@ def crawl(start_url: str, scope: Scope, client: SafeHttpClient) -> list[HttpResp
                 scope.validate_url(candidate)
             except ValueError:
                 continue
-            if _origin(candidate) == origin and candidate not in seen and len(seen) + len(queue) < scope.max_pages:
+            if _origin(candidate) == origin and candidate not in seen and len(seen) + len(queue) < page_limit:
                 queue.append(candidate)
 
     return responses
