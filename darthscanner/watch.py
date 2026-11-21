@@ -123,6 +123,11 @@ def _focus_score(focus: str, history: dict, signals: set[str], cycle: int) -> fl
     else:
         score -= min(empty_runs * 1.5, 6.0)  # de-prioritize repeatedly unproductive checks
         score += min(findings * 0.75, 3.0)  # retain attention on historically useful checks
+    if history.get("last_focus") == focus:
+        score -= 4.0  # avoid selecting the same focus again at a round boundary
+    for category in history.get("finding_categories", []):
+        if _FINDING_FOCUS.get(category) == focus:
+            score += 2.5  # discoveries in one category raise related follow-up priority
     for signal, related in _SIGNAL_FOCUS.items():
         if focus in related and signal in signals:
             score += 5.0
