@@ -21,6 +21,8 @@ class Scope:
     timeout_seconds: int = 8
     root_domain: str | None = None
     include_subdomains: bool = False
+    max_subdomain_depth: int = 5
+    max_subdomain_hosts: int = 25
 
     def validate_url(self, url: str) -> str:
         parts = urlsplit(url)
@@ -92,6 +94,8 @@ def load_scope(path: str | Path) -> Scope:
         allowed_hosts=hosts,
         root_domain=root_domain,
         include_subdomains=include_subdomains,
+        max_subdomain_depth=bounded_int("max_subdomain_depth", 5, 1, 8),
+        max_subdomain_hosts=bounded_int("max_subdomain_hosts", 25, 1, 100),
         max_pages=bounded_int("max_pages", 30, 1, 200),
         max_requests=bounded_int("max_requests", 50, 1, 500),
         request_delay_seconds=float(delay),
