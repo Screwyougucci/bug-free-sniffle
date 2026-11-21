@@ -290,6 +290,9 @@ class DarthScannerApp:
         except (OSError, json.JSONDecodeError):
             return
         registry = history.get("finding_registry") or {}
+        if not self.url_var.get().strip() and history.get("target"):
+            self.url_var.set(history["target"])
+            self.current_target = history["target"]
         counts = {key: 0 for key in ("new", "recurring", "changed", "resolved")}
         for item in registry.values():
             status = item.get("status")
