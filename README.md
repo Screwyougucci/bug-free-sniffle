@@ -1,5 +1,9 @@
 # Darth Scanner — Web & Server Security Scanner
 
+## Version 0.14.0
+
+The desktop findings table now shows official NVD CVSS base scores beside severity, and finding details retain the CVSS vector. A score is shown only when an applicable CVE record supplies one; other observations are marked N/A rather than assigned a made-up CVSS rating. The Windows desktop app now requests per-monitor DPI awareness and scales Tk fonts to the active display DPI for sharper text and controls on high-resolution screens.
+
 A conventional Python security scanner for websites and server software you own or are explicitly authorized to assess. **No AI, LLMs, or generative analysis.** Detection is implemented through deterministic HTTP/TLS checks, passive software fingerprints, local CVE data, and bounded fuzzing.
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
