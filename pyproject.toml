@@ -13,6 +13,7 @@ dependencies = []
 
 [project.scripts]
 darth-scanner = "darthscanner.cli:main"
+darth-scanner-app = "darthscanner.app:main"
 
 [tool.setuptools]
 packages = ["darthscanner"]
