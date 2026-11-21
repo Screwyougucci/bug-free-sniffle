@@ -13,6 +13,7 @@ from .browser_audit import inspect_browser_code
 from .js_research import extract_same_origin_script_urls, inspect_javascript_source
 from .crawler import crawl
 from .cve import load_inventory, load_nvd_feed, match_cves
+from .cve_online import lookup_cves_for_components
 from .exposure import probe_sensitive_paths
 from .fingerprint import fingerprint_response
 from .fuzzer import observations_to_dict, run_fuzz
@@ -39,6 +40,7 @@ def _parser() -> argparse.ArgumentParser:
     scan.add_argument("--scope", default="scope.json", help="authorization scope JSON")
     scan.add_argument("--acknowledge-authorization", action="store_true")
     scan.add_argument("--nvd-json", help="optional local NVD 2.0 JSON feed for CVE matching")
+    scan.add_argument("--no-cve-lookup", action="store_true", help="disable automatic NVD CVE lookup")
     scan.add_argument("--inventory", help="optional CPE inventory JSON to add to discovered software")
     scan.add_argument("--output", default="darth-report.json", help="JSON report output")
     scan.add_argument("--profile", choices=("full", "web", "tls", "exposure", "methods"), default="full", help="select one bounded analysis profile")
@@ -51,6 +53,7 @@ def _parser() -> argparse.ArgumentParser:
     watch.add_argument("--output-dir", default="darth-watch-reports", help="directory for per-cycle JSON reports and history")
     watch.add_argument("--interval", type=int, default=30, help="seconds between adaptive checks (minimum 30)")
     watch.add_argument("--cycles", type=int, help="optional number of profiles to run; default is unlimited")
+    watch.add_argument("--no-cve-lookup", action="store_true", help="disable automatic NVD CVE lookup")
 
     fuzz = commands.add_parser("fuzz", help="run bounded, benign GET query-parameter fuzzing")
     fuzz.add_argument("--url", required=True, help="specific GET URL containing the parameter")
@@ -90,7 +93,8 @@ def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
                   findings: list, software: list[dict] | None = None,
                   fuzz_observations: list[dict] | None = None,
                   exposure_paths_checked: int = 0, tls_probes: int = 0,
-                  source_files_reviewed: int = 0, source_files_skipped: int = 0) -> dict:
+                  source_files_reviewed: int = 0, source_files_skipped: int = 0,
+                  cve_lookup_status: dict | None = None) -> dict:
     """Write the single Notepad-friendly JSON report."""
     return write_report(
         args.output,
@@ -104,6 +108,7 @@ def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
         tls_probes=tls_probes,
         source_files_reviewed=source_files_reviewed,
         source_files_skipped=source_files_skipped,
+        cve_lookup_status=cve_lookup_status,
     )
 
 def main(argv: list[str] | None = None) -> int:
@@ -250,10 +255,24 @@ def main(argv: list[str] | None = None) -> int:
                     components_by_cpe[component.cpe] = component
             components = list(components_by_cpe.values())
 
+            cve_lookup_status = None
             if args.nvd_json:
                 feed = load_nvd_feed(args.nvd_json)
                 findings.extend(match_cves(components, feed))
+                cve_lookup_status = {"source": "Local NVD JSON feed", "components_seen": len(components), "records_loaded": len(feed)}
                 print(f"CVE matching: {len(components)} component(s) against {len(feed)} NVD record(s).")
+            elif not args.no_cve_lookup and components and profile in {"full", "web"} and focus in {"all", "fingerprint"}:
+                cve_findings, cve_lookup_status = lookup_cves_for_components(components, max_network_lookups=1)
+                findings.extend(cve_findings)
+                print(
+                    "NVD CVE lookup: "
+                    f"{cve_lookup_status['components_checked']}/{cve_lookup_status['components_seen']} component(s) checked; "
+                    f"{len(cve_findings)} candidate CVE match(es); "
+                    f"{cve_lookup_status['network_lookups']} network lookup(s), "
+                    f"{cve_lookup_status['cache_hits']} cache hit(s)."
+                )
+                for error in cve_lookup_status["errors"]:
+                    print(f"NVD lookup unavailable: {error}")
 
             pages = []
             for r in responses:
@@ -288,6 +307,7 @@ def main(argv: list[str] | None = None) -> int:
                 args, target=args.target, requests_made=client.requests_made,
                 pages=pages, findings=findings, software=software,
                 exposure_paths_checked=exposure_paths_checked, tls_probes=tls_probes,
+                cve_lookup_status=cve_lookup_status,
             )
             print(f"Profile: {profile}; focus: {focus}. Reviewed {len(responses)} page/resource response(s) and {len(script_responses)} same-origin JavaScript file(s); {client.requests_made} HTTP request(s).")
             print(f"Exposure paths checked: {exposure_paths_checked}; TLS probes attempted: {tls_probes}.")

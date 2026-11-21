@@ -14,6 +14,7 @@ class SoftwareComponent:
     cpe: str
     source: str
     confidence: str = "medium"
+    source_url: str | None = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -84,6 +85,7 @@ def fingerprint_response(response: HttpResponse) -> list[SoftwareComponent]:
                 cpe=cpe_template.format(version=version),
                 source=f"{source}: {value[:180]}",
                 confidence="medium",
+                source_url=response.url,
             )
             found[component.cpe] = component
     return list(found.values())

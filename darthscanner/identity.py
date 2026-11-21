@@ -110,6 +110,12 @@ def update_finding_registry(
                 "source_excerpt": finding.get("source_excerpt"),
                 "source_line": finding.get("source_line"),
                 "remediation": str(finding.get("remediation", "")),
+                "cve_ids": list(finding.get("cve_ids", [])),
+                "cwe_ids": list(finding.get("cwe_ids", [])),
+                "cvss_score": finding.get("cvss_score"),
+                "cvss_version": finding.get("cvss_version"),
+                "references": list(finding.get("references", [])),
+                "affected_component": finding.get("affected_component"),
             }
             newly_seen.append(fid)
         else:
@@ -135,6 +141,12 @@ def update_finding_registry(
                 "source_excerpt": finding.get("source_excerpt", entry.get("source_excerpt")),
                 "source_line": finding.get("source_line", entry.get("source_line")),
                 "remediation": str(finding.get("remediation", entry.get("remediation", ""))),
+                "cve_ids": list(finding.get("cve_ids", entry.get("cve_ids", []))),
+                "cwe_ids": list(finding.get("cwe_ids", entry.get("cwe_ids", []))),
+                "cvss_score": finding.get("cvss_score", entry.get("cvss_score")),
+                "cvss_version": finding.get("cvss_version", entry.get("cvss_version")),
+                "references": list(finding.get("references", entry.get("references", []))),
+                "affected_component": finding.get("affected_component", entry.get("affected_component")),
             })
         registry[fid] = entry
         round_seen.add(fid)

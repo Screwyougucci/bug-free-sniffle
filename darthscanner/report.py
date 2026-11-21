@@ -20,7 +20,8 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
                  exposure_paths_checked: int = 0,
                  tls_probes: int = 0,
                  source_files_reviewed: int = 0,
-                 source_files_skipped: int = 0) -> dict:
+                 source_files_skipped: int = 0,
+                 cve_lookup_status: dict | None = None) -> dict:
     """Normalize, deduplicate, sort, and summarize scan results."""
     unique = {}
     for item in findings:
@@ -72,6 +73,7 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
             "fuzz_anomalies": sum("no notable" not in item.get("note", "") for item in (fuzz_observations or [])),
         },
         "software_components": software_components or [],
+        "cve_lookup": cve_lookup_status or {"source": "NVD CVE API 2.0", "status": "not run"},
         "pages": pages,
         "findings": [{**item.to_dict(), **finding_identity(item.to_dict())} for item in normalized],
         "identity": report_identity(target, pages),
@@ -92,7 +94,8 @@ def write_report(path: str, *, target: str, requests_made: int,
                  exposure_paths_checked: int = 0,
                  tls_probes: int = 0,
                  source_files_reviewed: int = 0,
-                 source_files_skipped: int = 0) -> dict:
+                 source_files_skipped: int = 0,
+                 cve_lookup_status: dict | None = None) -> dict:
     payload = build_report(
         target=target,
         requests_made=requests_made,
@@ -104,6 +107,7 @@ def write_report(path: str, *, target: str, requests_made: int,
         tls_probes=tls_probes,
         source_files_reviewed=source_files_reviewed,
         source_files_skipped=source_files_skipped,
+        cve_lookup_status=cve_lookup_status,
     )
     Path(path).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return payload
@@ -185,7 +189,8 @@ for(const [label,value] of tiles){const card=document.createElement("div");card.
 function addField(parent,label,value,cls){if(value===undefined||value===null||value==="")return;const wrap=document.createElement("div");wrap.className="field";const name=document.createElement("b");name.textContent=label;const text=document.createElement("p");if(Array.isArray(value))text.textContent=value.join(", ");else text.textContent=String(value);if(cls)text.className=cls;wrap.append(name,text);parent.append(wrap)}
 function render(){const severity=$("severity").value;const needle=$("search").value.trim().toLowerCase();const cwe=$("cwe").value.trim().toLowerCase();const min=$("cvss").value===""?null:Number($("cvss").value);const filtered=findings.filter(f=>{if(severity&&f.severity!==severity)return false;if(cwe&&!(f.cwe_ids||[]).some(x=>x.toLowerCase().includes(cwe)))return false;if(min!==null&&(f.cvss_score===null||f.cvss_score===undefined||Number(f.cvss_score)<min))return false;const blob=[f.title,f.url,f.evidence,f.description,f.impact,f.affected_component,(f.cve_ids||[]).join(" "),(f.cwe_ids||[]).join(" ")].join(" ").toLowerCase();return !needle||blob.includes(needle)});$("result-count").textContent=filtered.length+" of "+findings.length+" findings";const root=$("findings");root.replaceChildren();if(!filtered.length){const empty=document.createElement("div");empty.className="empty";empty.textContent="No findings match the selected filters.";root.append(empty);return}for(const f of filtered){const card=document.createElement("article");card.className="finding";const head=document.createElement("div");head.className="fhead";const title=document.createElement("div");title.className="ftitle";title.textContent=f.title||"Untitled finding";const badges=document.createElement("div");badges.className="badges";for(const label of [String(f.severity||"info").toUpperCase(),f.cvss_score!==null&&f.cvss_score!==undefined?"CVSS "+f.cvss_score:"",f.confidence_score!==undefined?"Confidence "+f.confidence_score+"%":"",f.finding_id||""]){if(!label)continue;const badge=document.createElement("span");badge.className="badge "+String(f.severity||"info");badge.textContent=label;badges.append(badge)}head.append(title,badges);card.append(head);addField(card,"Category / type",[f.category,f.kind].filter(Boolean).join(" · "));addField(card,"Affected URL",f.url);addField(card,"CVE / CWE",[...(f.cve_ids||[]),...(f.cwe_ids||[])].join(", "));addField(card,"Description",f.description);addField(card,"Impact",f.impact);addField(card,"Evidence",f.evidence);addField(card,"Exact source snippet",f.source_excerpt);addField(card,"Source line",f.source_line);addField(card,"Remediation",f.remediation);addField(card,"References",f.references||[],"refs");root.append(card)}}
 for(const id of ["search","severity","cwe","cvss"])$(id).addEventListener("input",render);
-const components=report.software_components||[];$("software").textContent=components.length?components.map(x=>[x.name,x.version,"("+x.cpe+")"].join(" ")).join("\n"):"No versioned software fingerprints identified.";
+const components=report.software_components||[];$("software").textContent=components.length?components.map(x=>[x.name,x.version,"("+x.cpe+")"].join(" ")).join("
+"):"No versioned software fingerprints identified.";
 render();
 </script></body></html>"""
     Path(path).write_text(page, encoding="utf-8")

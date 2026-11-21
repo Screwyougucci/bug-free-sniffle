@@ -204,7 +204,7 @@ def _save_history(path: Path, history: dict) -> None:
 def run_watch(
     *, target: str, scope_path: str, acknowledge_authorization: bool,
     output_dir: str, interval: int = 30, cycles: int | None = None,
-    stop_event: Event | None = None,
+    stop_event: Event | None = None, cve_lookup: bool = True,
 ) -> int:
     """Run evidence-driven, read-only focused analysis until interrupted."""
     if interval < 30:
@@ -248,6 +248,8 @@ def run_watch(
             ]
             if acknowledge_authorization:
                 command.append("--acknowledge-authorization")
+            if not cve_lookup:
+                command.append("--no-cve-lookup")
             print(f"\nCycle {total_cycle}: selected {focus} (priority {score:.2f}) from evidence: {', '.join(sorted(signals)) or 'initial discovery'}", flush=True)
             # Lazy import avoids the cli <-> watch import cycle. Scan in-process.
             from .cli import main as cli_main

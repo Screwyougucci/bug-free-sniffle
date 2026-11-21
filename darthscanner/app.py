@@ -115,6 +115,7 @@ class DarthScannerApp:
         self.stop_button.pack(side="left", padx=3)
         self.authorized_var = tk.BooleanVar(value=False)
         self.include_subdomains_var = tk.BooleanVar(value=False)
+        self.cve_lookup_var = tk.BooleanVar(value=True)
         tk.Checkbutton(
             target_panel,
             text="I own this website or have explicit permission to run security checks against it.",
@@ -126,6 +127,13 @@ class DarthScannerApp:
             target_panel,
             text="Include subdomains (passive discovery, then bounded read-only checks)",
             variable=self.include_subdomains_var, bg="#151d2a", fg="#d7d9e0",
+            activebackground="#151d2a", activeforeground="white", selectcolor="#202a3a",
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(6, 0))
+        tk.Checkbutton(
+            target_panel,
+            text="Automatically check detected software versions against the NVD CVE database",
+            variable=self.cve_lookup_var, bg="#151d2a", fg="#d7d9e0",
             activebackground="#151d2a", activeforeground="white", selectcolor="#202a3a",
             font=("Segoe UI", 9),
         ).pack(anchor="w", pady=(6, 0))
@@ -214,6 +222,7 @@ class DarthScannerApp:
             f"Start continuous, read-only web checks for:\n\n{target}\n\n"
             f"Authorized root hostname: {host}\n\n"
             + ("Subdomain discovery and checks: ENABLED (up to 25 discovered hosts; shared request/page budgets).\n\n" if self.include_subdomains_var.get() else "Subdomain discovery: disabled.\n\n")
+            + ("NVD CVE identification: ENABLED (detected product versions are checked against the NVD database).\n\n" if self.cve_lookup_var.get() else "NVD CVE identification: disabled.\n\n")
             + "Only proceed if you have permission for the root host and, when enabled, the entire domain and all its subdomains. The app will keep checking until you stop it."
         ):
             return
@@ -249,12 +258,12 @@ class DarthScannerApp:
         self._set_running(True)
         self.worker = threading.Thread(
             target=self._run_process,
-            args=(target, scope_path, output_dir),
+            args=(target, scope_path, output_dir, bool(self.cve_lookup_var.get())),
             daemon=True,
         )
         self.worker.start()
 
-    def _run_process(self, target: str, scope_path: Path, output_dir: Path):
+    def _run_process(self, target: str, scope_path: Path, output_dir: Path, cve_lookup: bool):
         """Run the scheduler in this app process and stream all output into the UI."""
         writer = _QueueWriter(self.events)
         try:
@@ -266,6 +275,7 @@ class DarthScannerApp:
                     output_dir=str(output_dir),
                     interval=MIN_INTERVAL,
                     stop_event=self.stop_event,
+                    cve_lookup=cve_lookup,
                 )
             self.events.put(("exit", f"Watch stopped (status {code})."))
         except Exception as exc:
@@ -454,6 +464,13 @@ class DarthScannerApp:
             source_site = "Not available"
 
         section("Source website", source_site, "#70d6b0")
+        section("CVE identifier(s)", ", ".join(item.get("cve_ids") or []) or
+                "No directly applicable CVE identified from the available evidence.", "#ff9b72")
+        cvss = item.get("cvss_score")
+        cvss_text = f"CVSS {item.get('cvss_version') or ''} {cvss}/10".strip() if cvss is not None else "Not scored"
+        section("CVSS severity score", cvss_text, "#f4c66b")
+        section("Affected software component", item.get("affected_component"))
+        section("CVE references", "\n".join(item.get("references") or []), "#8fc5ff")
         section("What the scanner detected", item.get("description"))
         section("Why this may matter", item.get("impact") or
                 "This is an automated observation, not proof of exploitability. Review the evidence and affected component in context before treating it as a vulnerability.",

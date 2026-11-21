@@ -222,7 +222,7 @@ def match_cves(components: list[SoftwareComponent], feed: list[dict[str, Any]]) 
                 title=f"{cve_id}: {component.name} {component.version} may be affected",
                 severity=severity,
                 confidence="medium" if component.confidence == "high" else "low",
-                url="asset-inventory",
+                url=component.source_url or "asset-inventory",
                 evidence=evidence,
                 remediation="Verify the exact installed vendor build and affected-version range, including vendor backports. Upgrade to a vendor-fixed release or apply the vendor mitigation; check the linked advisory before changing production systems.",
                 kind="candidate-vulnerability",

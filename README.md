@@ -4,7 +4,7 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.9.1 capabilities
+## Version 0.12.0 capabilities
 
 Version 0.8.0 adds content-aware adaptive watch. Version 0.8.1 adds persistent discovery identities: stable target, resource, behavior, evidence, test, and finding IDs, plus lifecycle tracking for new, recurring, changed, and resolved findings. Watch history stores only metadata and finding evidence summaries, not response bodies, cookies, or credentials. A finding is marked resolved only after a complete applicable check round finishes without observing it. It selects one focused analysis per cycle, learns which checks apply from response metadata, remembers completed checks and unique finding IDs, and resets its check queue when the response changes. It stays on the exact authorized target and uses only the bounded web GET/crawl path; it does not rotate into host-wide TLS, HTTP-method, or sensitive-path probes. The minimum watch interval is 30 seconds.
 
@@ -52,13 +52,16 @@ The local Python/OpenSSL build may not include obsolete cipher implementations. 
 
 Versioned response-header fingerprints now include nginx, Apache HTTP Server, PHP, Microsoft IIS, OpenSSL, OpenResty, Caddy, lighttpd, HAProxy, Envoy, Traefik, Eclipse Jetty, Apache Tomcat, Gunicorn, Uvicorn, Varnish Cache, and Node.js.
 
-Fingerprints are based on publicly returned headers and can be hidden, spoofed, or altered by reverse proxies. A missing fingerprint does not mean that software is absent. Use a trusted software inventory or SBOM for better coverage.
+Fingerprints are based on publicly returned headers and can be hidden, spoofed, or altered by reverse proxies. Automatic CVE matching is limited to products and versions the scanner can identify this way; a missing fingerprint does not mean that software is absent. Use a trusted software inventory or SBOM for better coverage.
 
 ### 5. CVE intelligence and CVSS severity
 
-- Matches CPE 2.3 software inventory against a local NVD 2.0 JSON feed.
+- Automatically queries the NVD CVE API 2.0 for detected CPE 2.3 product/version fingerprints.
+- Caches NVD results locally for 24 hours and performs at most one uncached product lookup per 30-second adaptive scan cycle to respect public API rate limits.
+- The desktop app includes an option to disable automatic NVD lookups; an optional NVD API key can be supplied through the `NVD_API_KEY` environment variable.
+- Also supports matching a trusted CPE 2.3 software inventory against a local NVD 2.0 JSON feed.
 - Uses NVD affected CPE criteria and numeric dotted-version boundaries where supported.
-- Includes CVE ID, English description, CVSS version, base score, vector, severity, matched software/version evidence, and NVD/advisory links.
+- Includes the exact CVE ID, English description, CVSS version, base score, vector, severity, affected component, observed source URL, matched software/version evidence, and NVD/advisory links.
 - Uses detected software fingerprints and optional user-provided inventory.
 
 CVSS severity bands:
