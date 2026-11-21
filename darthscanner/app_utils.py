@@ -16,12 +16,13 @@ def parse_target_url(value: str) -> tuple[str, str]:
         raise ValueError("Enter a valid website URL without embedded credentials.")
     try:
         host = parts.hostname.encode("idna").decode("ascii").lower().rstrip(".")
+        if ":" in host:
+            raise ValueError("IPv6 literal targets are not supported by the current exact-host scope.")
         port = parts.port
     except (UnicodeError, ValueError) as exc:
         raise ValueError("The website address or port is invalid.") from exc
     netloc = host if port is None else f"{host}:{port}"
     path = parts.path or "/"
+    # Do not persist or replay query strings that may contain session tokens.
     normalized = f"{parts.scheme.lower()}://{netloc}{path}"
-    if parts.query:
-        normalized += "?" + parts.query
     return normalized, host
