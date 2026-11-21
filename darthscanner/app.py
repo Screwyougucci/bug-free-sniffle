@@ -19,7 +19,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk, filedialog
 from urllib.parse import urlsplit
 
-from .identity import target_id
+from .identity import target_id, resource_id
 
 
 APP_NAME = "Darth Scanner"
@@ -169,6 +169,7 @@ class DarthScannerApp:
             self.table.heading(col, text=labels[col])
             self.table.column(col, width=widths[col], minwidth=60, anchor="w")
         self.table.pack(fill="both", expand=True)
+        self.table.bind("<Double-1>", self.show_finding_details)
 
         log_panel = tk.Frame(split, bg="#191b23", padx=12, pady=10)
         split.add(log_panel, minsize=130)
@@ -214,7 +215,7 @@ class DarthScannerApp:
         ):
             return
 
-        folder = app_data_dir() / target_id(target)
+        folder = app_data_dir() / (target_id(target) + "-" + resource_id(target))
         folder.mkdir(parents=True, exist_ok=True)
         scope_path = folder / "scope.json"
         output_dir = folder / "reports"
@@ -327,6 +328,39 @@ class DarthScannerApp:
                 item.get("occurrences", 0),
                 item.get("last_seen", ""),
             ))
+
+    def show_finding_details(self, _event=None):
+        selected = self.table.selection()
+        if not selected or self.current_folder is None:
+            return
+        values = self.table.item(selected[0], "values")
+        if not values:
+            return
+        finding_id = values[3]
+        try:
+            history = json.loads((self.current_folder / "history.json").read_text(encoding="utf-8"))
+            item = history.get("finding_registry", {}).get(finding_id, {})
+        except (OSError, json.JSONDecodeError):
+            return
+        detail = tk.Toplevel(self.root)
+        detail.title("Discovery details")
+        detail.geometry("720x520")
+        detail.configure(bg="#191b23")
+        body = tk.Text(detail, bg="#11131a", fg="#e7e8ed", insertbackground="white",
+                       relief="flat", wrap="word", padx=14, pady=12, font=("Consolas", 9))
+        body.pack(fill="both", expand=True, padx=12, pady=12)
+        fields = [
+            ("Title", item.get("title")), ("Status", item.get("status")),
+            ("Severity", item.get("severity")), ("Category", item.get("category")),
+            ("Finding ID", item.get("finding_id")), ("Resource ID", item.get("resource_id")),
+            ("Behavior ID", item.get("behavior_id")), ("Evidence ID", item.get("evidence_id")),
+            ("Test ID", item.get("test_id")), ("URL", item.get("url")),
+            ("First seen", item.get("first_seen")), ("Last seen", item.get("last_seen")),
+            ("Occurrences", item.get("occurrences")), ("Description", item.get("description")),
+            ("Evidence", item.get("evidence")), ("Remediation", item.get("remediation")),
+        ]
+        body.insert("end", "\n\n".join(f"{label}:\n{value or 'Not available'}" for label, value in fields))
+        body.configure(state="disabled")
 
     def open_data_folder(self):
         folder = self.current_folder or app_data_dir()
