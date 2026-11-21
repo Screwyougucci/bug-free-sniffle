@@ -152,6 +152,10 @@ def _http_evidence(response) -> tuple[dict, list[str]]:
         "capture_time_utc": datetime.now(timezone.utc).isoformat(),
         "request_method": "GET",
         "request_url": safe_url,
+        "request_headers": {
+            "User-Agent": "BugFreeSniffle/0.3 (+authorized-security-assessment)",
+            "Accept": "text/html,application/json,text/plain;q=0.9,*/*;q=0.5",
+        },
         "response_status": response.status,
         "response_bytes": len(body),
         "response_elapsed_seconds": round(float(response.elapsed_seconds), 3),
