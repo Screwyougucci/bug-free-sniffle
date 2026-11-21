@@ -4,9 +4,9 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.7.0 capabilities
+## Version 0.8.0 capabilities
 
-Version 0.7.0 adds adaptive watch mode: the scanner rotates through web, TLS, exposure-metadata, and HTTP-method profiles; writes a separate JSON report for every cycle; and persists unique finding IDs in a history file. Watch mode enforces a minimum 10-second interval between profiles and still applies the scope file's per-request limits and delay.
+Version 0.8.0 adds content-aware adaptive watch. It selects one focused analysis per cycle, learns which checks apply from response metadata, remembers completed checks and unique finding IDs, and resets its check queue when the response changes. It stays on the exact authorized target and uses only the bounded web GET/crawl path; it does not rotate into host-wide TLS, HTTP-method, or sensitive-path probes. The minimum watch interval is 30 seconds.
 
 
 
@@ -146,15 +146,15 @@ By default, this creates one JSON report. Override its path with `--output`.
 
 ## Continuous adaptive watch
 
-For a target you own or are explicitly authorized to assess, rotate through distinct bounded profiles until you press Ctrl+C:
+For a target you own or are explicitly authorized to assess, run adaptive analysis until you press Ctrl+C:
 
-```bash
-darth-scanner watch --target https://your-authorized-host.example --scope scope.json --acknowledge-authorization --output-dir darth-watch-reports --interval 10
+```powershell
+darth-scanner watch --target https://your-authorized-host.example --scope scope.json --acknowledge-authorization --output-dir darth-watch-reports --interval 30
 ```
 
-The profile order is web discovery, TLS assessment, HEAD-only exposure metadata checks, and OPTIONS-only HTTP method review. The loop never sends exploit payloads, submits forms, invokes unsafe HTTP methods, or downloads candidate sensitive files. Every cycle writes a timestamped JSON report; `history.json` tracks previously observed finding IDs and reports how many IDs are new. The default interval is 10 seconds and values below 10 are rejected. Stop with Ctrl+C. Watch mode exits if a scan fails scope validation or another scan error occurs.
+Each cycle performs one focused, read-only analysis selected from the previous response: headers/CSP, cookies, CORS metadata, redirect metadata, HTML patterns, passive browser-side indicators, same-origin JavaScript static review, or software fingerprinting. Checks that do not apply to the observed content are skipped. The scheduler remembers completed checks for the current response fingerprint and starts a new round after applicable checks finish; a changed response resets the queue. It writes one timestamped JSON report per cycle and stores history in `history.json`. It never submits forms, executes JavaScript, injects exploit payloads, invokes unsafe HTTP methods, probes unrelated paths, or follows links outside the exact origin. The minimum interval is 30 seconds. Stop with Ctrl+C.
 
-Run one profile manually with `darth-scanner scan --profile web|tls|exposure|methods --target ...`; omit `--profile` for the original full scan.
+Run a single focused analysis manually with `darth-scanner scan --target ... --scope scope.json --acknowledge-authorization --profile web --focus headers`. Available focuses: `headers`, `cookies`, `cors`, `redirects`, `html`, `browser`, `javascript`, and `fingerprint`. Use `--focus all` for the combined web analysis.
 
 ## Run a scan with CVE matching
 
