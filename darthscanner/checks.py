@@ -138,11 +138,14 @@ def _http_evidence(response) -> tuple[dict, list[str]]:
         "referrer-policy", "permissions-policy", "access-control-allow-origin",
         "access-control-allow-credentials", "location", "www-authenticate",
     }
-    observed = {
-        key: str(value)[:500]
-        for key, value in response.headers.items()
-        if key.lower() in allow_headers
-    }
+    observed = {}
+    for key, value in response.headers.items():
+        normalized_key = key.lower()
+        if normalized_key not in allow_headers:
+            continue
+        if normalized_key == "location":
+            value = _safe_evidence_url(urljoin(response.url, str(value)))
+        observed[normalized_key] = str(value)[:500]
     body = getattr(response, "body", b"") or b""
     digest = sha256(body).hexdigest()
     details = {
