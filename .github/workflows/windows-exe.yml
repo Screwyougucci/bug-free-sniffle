@@ -24,9 +24,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e . pyinstaller
       - name: Build console engine
-        run: pyinstaller --noconfirm --clean --onefile --console --name DarthScannerEngine --paths . darthscanner/engine.py
+        run: pyinstaller --noconfirm --clean --onefile --console --name DarthScannerEngine --paths . darthscanner_engine.py
       - name: Build desktop application
-        run: pyinstaller --noconfirm --clean --onefile --windowed --name DarthScanner --paths . darthscanner/app.py
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name DarthScanner --paths . darthscanner_gui.py
       - name: Assemble portable package
         shell: pwsh
         run: |
