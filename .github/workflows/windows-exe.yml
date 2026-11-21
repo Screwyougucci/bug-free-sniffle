@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - "v0.9.1-windows-exe"
+      - "v0.10.0-in-app-modern-ui"
     tags:
       - "v*"
 
@@ -33,7 +34,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path release | Out-Null
           Copy-Item dist/DarthScanner.exe release/
           @'
-          DARTH SCANNER 0.10.0
+          DARTH SCANNER 0.10.2
 
           Run DarthScanner.exe to open the desktop dashboard.
           All scanning runs inside the desktop app. No terminal or separate engine is required.
