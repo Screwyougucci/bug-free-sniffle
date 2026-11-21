@@ -106,6 +106,8 @@ def update_finding_registry(
                 "url": url,
                 "description": str(finding.get("description", "")),
                 "evidence": str(finding.get("evidence", "")),
+                "source_excerpt": finding.get("source_excerpt"),
+                "source_line": finding.get("source_line"),
                 "remediation": str(finding.get("remediation", "")),
             }
             newly_seen.append(fid)
@@ -129,6 +131,8 @@ def update_finding_registry(
                 "url": url,
                 "description": str(finding.get("description", entry.get("description", ""))),
                 "evidence": str(finding.get("evidence", entry.get("evidence", ""))),
+                "source_excerpt": finding.get("source_excerpt", entry.get("source_excerpt")),
+                "source_line": finding.get("source_line", entry.get("source_line")),
                 "remediation": str(finding.get("remediation", entry.get("remediation", ""))),
             })
         registry[fid] = entry
