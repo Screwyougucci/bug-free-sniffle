@@ -101,6 +101,8 @@ class DarthScannerApp:
                                   fg="#f7f9fc", insertbackground="white", relief="flat",
                                   font=("Consolas", 11))
         self.url_entry.pack(side="left", fill="x", expand=True, ipady=9, padx=(0, 9))
+        self.url_entry.bind("<Return>", self._on_target_change)
+        self.url_entry.bind("<FocusOut>", self._on_target_change)
         self.start_button = tk.Button(entry_row, text="START WATCH", command=self.start_watch,
                                       bg="#c0263d", fg="white", activebackground="#e03b55",
                                       relief="flat", padx=17, pady=8, font=("Segoe UI", 9, "bold"))
@@ -222,6 +224,10 @@ class DarthScannerApp:
         self.current_target = target
         self.current_folder = output_dir
         self.url_var.set(target)
+        # Switch the visible dashboard immediately; never leave another target's
+        # findings on screen while this target's first report is being created.
+        self._clear_dashboard()
+        self.refresh_dashboard()
         self._log(f"Starting authorized watch: {target}")
         self._log(f"Persistent data: {output_dir}")
         self.stop_event.clear()
@@ -274,6 +280,30 @@ class DarthScannerApp:
             pass
         self.root.after(150, self._poll_events)
 
+    def _clear_dashboard(self):
+        """Reset all target-specific counters and rows before loading another site."""
+        for key in ("total", "new", "recurring", "changed", "resolved", "cycles"):
+            self.stat_vars[key].set("0")
+        for item in self.table.get_children():
+            self.table.delete(item)
+
+    def _on_target_change(self, _event=None):
+        """Preview the selected site's own saved history when the URL is edited."""
+        try:
+            target, _host = parse_target_url(self.url_var.get())
+        except ValueError:
+            self.current_target = None
+            self.current_folder = None
+            self._clear_dashboard()
+            return
+        if target == self.current_target:
+            return
+        folder = app_data_dir() / (target_id(target) + "-" + resource_id(target))
+        self.current_target = target
+        self.current_folder = folder / "reports"
+        self._clear_dashboard()
+        self.refresh_dashboard()
+
     def refresh_dashboard(self):
         if self.current_folder is None:
             try:
@@ -290,6 +320,9 @@ class DarthScannerApp:
         try:
             history = json.loads(history_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
+            # A new target has no history yet. Keep its dashboard empty rather
+            # than displaying the previous target's stale findings.
+            self._clear_dashboard()
             return
         registry = history.get("finding_registry") or {}
         if not self.url_var.get().strip() and history.get("target"):
