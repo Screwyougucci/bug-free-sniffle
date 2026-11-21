@@ -77,6 +77,20 @@ class WatchProfileTests(unittest.TestCase):
         )
         self.assertEqual(chosen, "cookies")
 
+    def test_past_finding_categories_raise_related_focus_priority(self):
+        history = {"finding_categories": ["xss-indicator"]}
+        self.assertEqual(
+            choose_next_focus(["headers", "browser"], [], history=history),
+            "browser",
+        )
+
+    def test_last_focus_is_penalized_at_new_round_boundary(self):
+        history = {"last_focus": "headers"}
+        self.assertEqual(
+            choose_next_focus(["headers", "fingerprint"], ["headers", "fingerprint"], history=history),
+            "fingerprint",
+        )
+
     def test_completed_checks_are_deferred_until_round_resets(self):
         self.assertEqual(
             choose_next_focus(["headers", "cookies"], ["headers"], history={}),
