@@ -9,7 +9,7 @@ from html.parser import HTMLParser
 import re
 from urllib.parse import urljoin, urlsplit
 
-from .checks import Finding
+from .checks import Finding, source_excerpt_for
 
 
 class _BrowserParser(HTMLParser):
@@ -188,4 +188,6 @@ def inspect_browser_code(response) -> list[Finding]:
                 references=["https://cwe.mitre.org/data/definitions/200.html"],
                 confidence_score=85,
             ))
+    for finding in findings:
+        finding.source_excerpt, finding.source_line = source_excerpt_for(response, finding.title)
     return findings
