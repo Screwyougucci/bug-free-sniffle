@@ -587,7 +587,7 @@ class DarthScannerApp:
         evidence_lines.extend(
             f"  {key}: {value}" for key, value in (evidence_details.get("response_headers") or {}).items()
         )
-        section("Request / response evidence", "\\n".join(evidence_lines), "#8fc5ff")
+        section("Request / response evidence", "\n".join(evidence_lines), "#8fc5ff")
         section("Recommended remediation", item.get("remediation"))
         section("Affected URL", item.get("url"))
 
