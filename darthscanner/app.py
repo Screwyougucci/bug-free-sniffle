@@ -115,6 +115,8 @@ class DarthScannerApp:
         self.stop_button.pack(side="left", padx=3)
         self.authorized_var = tk.BooleanVar(value=False)
         self.include_subdomains_var = tk.BooleanVar(value=False)
+        self.subdomain_depth_var = tk.IntVar(value=5)
+        self.subdomain_hosts_var = tk.IntVar(value=25)
         self.cve_lookup_var = tk.BooleanVar(value=True)
         tk.Checkbutton(
             target_panel,
@@ -130,6 +132,17 @@ class DarthScannerApp:
             activebackground="#151d2a", activeforeground="white", selectcolor="#202a3a",
             font=("Segoe UI", 9),
         ).pack(anchor="w", pady=(6, 0))
+        discovery_settings = tk.Frame(target_panel, bg="#151d2a")
+        discovery_settings.pack(anchor="w", pady=(5, 0))
+        tk.Label(discovery_settings, text="Max depth", bg="#151d2a", fg="#aebbd0",
+                 font=("Segoe UI", 8)).pack(side="left")
+        tk.Spinbox(discovery_settings, from_=1, to=8, width=4, textvariable=self.subdomain_depth_var,
+                   bg="#202a3a", fg="#f7f9fc", insertbackground="white", relief="flat").pack(side="left", padx=(6, 16))
+        tk.Label(discovery_settings, text="Max hosts", bg="#151d2a", fg="#aebbd0",
+                 font=("Segoe UI", 8)).pack(side="left")
+        tk.Spinbox(discovery_settings, from_=1, to=100, width=5, textvariable=self.subdomain_hosts_var,
+                   bg="#202a3a", fg="#f7f9fc", insertbackground="white", relief="flat").pack(side="left", padx=(6, 0))
+
         tk.Checkbutton(
             target_panel,
             text="Automatically check detected software versions against the NVD CVE database",
@@ -137,7 +150,7 @@ class DarthScannerApp:
             activebackground="#151d2a", activeforeground="white", selectcolor="#202a3a",
             font=("Segoe UI", 9),
         ).pack(anchor="w", pady=(6, 0))
-        tk.Label(target_panel, text="For subdomain mode, enter the root/apex domain (example.com, not www.example.com). You must be authorized for the entire domain and all its subdomains.",
+        tk.Label(target_panel, text="Enter the root/apex domain. Recursive discovery is passive; active checks require authorization for the entire domain and all subdomains.",
                  bg="#151d2a", fg="#9eabc0", font=("Segoe UI", 8)).pack(anchor="w", pady=(5, 0))
 
         stats = tk.Frame(main, bg="#0b0e14")
@@ -165,6 +178,8 @@ class DarthScannerApp:
                  font=("Segoe UI", 10, "bold")).pack(side="left")
         tk.Button(title_row, text="REFRESH", command=self.refresh_dashboard, bg="#253247",
                   fg="white", relief="flat", padx=10, pady=4).pack(side="right")
+        tk.Button(title_row, text="DOMAIN TREE", command=self.show_domain_tree, bg="#253247",
+                  fg="white", relief="flat", padx=10, pady=4).pack(side="right", padx=6)
         tk.Button(title_row, text="OPEN DATA FOLDER", command=self.open_data_folder, bg="#253247",
                   fg="white", relief="flat", padx=10, pady=4).pack(side="right", padx=6)
 
@@ -221,7 +236,7 @@ class DarthScannerApp:
             "Confirm authorized testing",
             f"Start continuous, read-only web checks for:\n\n{target}\n\n"
             f"Authorized root hostname: {host}\n\n"
-            + ("Subdomain discovery and checks: ENABLED (up to 25 discovered hosts; shared request/page budgets).\n\n" if self.include_subdomains_var.get() else "Subdomain discovery: disabled.\n\n")
+            + (f"Recursive subdomain discovery: ENABLED (depth up to {self.subdomain_depth_var.get()}, up to {self.subdomain_hosts_var.get()} DNS-verified hosts; shared request/page budgets).\n\n" if self.include_subdomains_var.get() else "Subdomain discovery: disabled.\n\n")
             + ("NVD CVE identification: ENABLED (detected product versions are checked against the NVD database).\n\n" if self.cve_lookup_var.get() else "NVD CVE identification: disabled.\n\n")
             + "Only proceed if you have permission for the root host and, when enabled, the entire domain and all its subdomains. The app will keep checking until you stop it."
         ):
@@ -239,6 +254,8 @@ class DarthScannerApp:
             "root_domain": host if self.include_subdomains_var.get() else None,
             "max_pages": 30 if self.include_subdomains_var.get() else 12,
             "max_requests": 24,
+            "max_subdomain_depth": int(self.subdomain_depth_var.get()),
+            "max_subdomain_hosts": int(self.subdomain_hosts_var.get()),
             "request_delay_seconds": 1.0,
             "timeout_seconds": 8,
         }
@@ -252,7 +269,10 @@ class DarthScannerApp:
         self.refresh_dashboard()
         self._log(f"Starting authorized watch: {target}")
         if self.include_subdomains_var.get():
-            self._log(f"Subdomain mode enabled for {host}; discovery is passive and checks are bounded.")
+            self._log(
+                f"Recursive subdomain mode enabled for {host}; depth {scope['max_subdomain_depth']}, "
+                f"host limit {scope['max_subdomain_hosts']}. Discovery is passive and active checks are bounded."
+            )
         self._log(f"Persistent data: {output_dir}")
         self.stop_event.clear()
         self._set_running(True)
@@ -374,6 +394,56 @@ class DarthScannerApp:
                 item.get("occurrences", 0),
                 item.get("last_seen", ""),
             ))
+
+    def show_domain_tree(self):
+        """Display the latest recursively discovered host hierarchy."""
+        if self.current_folder is None:
+            messagebox.showinfo("Domain tree", "Start a scan with subdomain discovery enabled first.")
+            return
+        reports = sorted(self.current_folder.glob("cycle-*.json"),
+                         key=lambda path: path.stat().st_mtime, reverse=True)
+        discovery = None
+        for report_path in reports:
+            try:
+                payload = json.loads(report_path.read_text(encoding="utf-8"))
+                candidate = payload.get("domain_discovery")
+                if candidate and candidate.get("enabled"):
+                    discovery = candidate
+                    break
+            except (OSError, json.JSONDecodeError):
+                continue
+        if not discovery:
+            messagebox.showinfo("Domain tree", "No recursive subdomain results are saved for this target yet.")
+            return
+
+        window = tk.Toplevel(self.root)
+        window.title("Recursive domain tree | Darth Scanner")
+        window.geometry("760x600")
+        window.configure(bg="#0b0e14")
+        tk.Label(window, text=f"AUTHORIZED ROOT  /  {discovery.get('root_domain') or 'unknown'}",
+                 bg="#0b0e14", fg="#f3f6fb", font=("Segoe UI", 11, "bold")).pack(anchor="w", padx=18, pady=(16, 4))
+        tk.Label(window, text=f"Depth limit: {discovery.get('max_depth')}  •  Host limit: {discovery.get('max_hosts')}  •  DNS-verified discoveries only",
+                 bg="#0b0e14", fg="#9eabc0", font=("Segoe UI", 8)).pack(anchor="w", padx=18, pady=(0, 12))
+        tree = ttk.Treeview(window, columns=("depth", "status"), show="tree headings")
+        tree.heading("#0", text="HOSTNAME")
+        tree.heading("depth", text="LEVEL")
+        tree.heading("status", text="DNS")
+        tree.column("#0", width=480)
+        tree.column("depth", width=80, anchor="center")
+        tree.column("status", width=120, anchor="center")
+        tree.pack(fill="both", expand=True, padx=18, pady=(0, 18))
+        root = str(discovery.get("root_domain") or "")
+        root_id = tree.insert("", "end", text=root, values=("root", "authorized"), open=True)
+        parent_ids = {root: root_id}
+        for item in sorted(discovery.get("hosts") or [], key=lambda value: (value.get("depth", 0), value.get("host", ""))):
+            host = str(item.get("host", ""))
+            parent = str(item.get("parent") or root)
+            parent_id = parent_ids.get(parent, root_id)
+            node_id = tree.insert(parent_id, "end", text=host,
+                                  values=(item.get("depth", ""), "verified" if item.get("dns_verified") else "unverified"))
+            parent_ids[host] = node_id
+        if not discovery.get("hosts"):
+            tree.insert(root_id, "end", text="No DNS-verified subdomains discovered", values=("", ""))
 
     def show_finding_details(self, _event=None):
         """Show a structured analyst view when a finding is selected."""
