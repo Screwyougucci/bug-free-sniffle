@@ -69,12 +69,18 @@ def source_excerpt_for(response, title: str) -> tuple[str | None, int | None]:
         patterns = [r"""<[a-z][^>]*\bon[a-z]+\s*=\s*['"][^'"]*['"][^>]*>"""]
     elif "javascript: url" in title_lower:
         patterns = [r"""<[a-z][^>]*(?:href|src|action)\s*=\s*['"]\s*javascript:[^'"]*['"][^>]*>"""]
-    elif "source-and-sink" in title_lower:
+    elif "source-and-sink" in title_lower or "source and dangerous javascript sink" in title_lower:
         patterns = [r"""(?im)^.*(?:location\.(?:hash|search|href)|document\.URL|URLSearchParams).*(?:innerHTML|outerHTML|insertAdjacentHTML|document\.write|eval\s*\().*$"""]
+    elif "message event data" in title_lower or "origin check" in title_lower:
+        patterns = [r"""(?im)^.*(?:addEventListener|attachEvent).*message.*$""", r"""(?im)^.*event\.data.*$"""]
     elif "postmessage" in title_lower:
         patterns = [r"""(?im)^.*postMessage.{0,300}\*.*$"""]
     elif "web storage" in title_lower:
         patterns = [r"""(?im)^.*(?:localStorage|sessionStorage)\.setItem.*$"""]
+    elif "prototype mutation" in title_lower:
+        patterns = [r"""(?im)^.*(?:__proto__|constructor\s*\.\s*prototype).*(?:=|\[).*$"""]
+    elif "document.domain" in title_lower:
+        patterns = [r"""(?im)^.*document\.domain\s*=.*$"""]
     elif "source map" in title_lower:
         patterns = [r"""(?im)^.*sourceMappingURL.*$"""]
     elif "directory index" in title_lower:
