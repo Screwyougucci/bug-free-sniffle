@@ -21,7 +21,8 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
                  tls_probes: int = 0,
                  source_files_reviewed: int = 0,
                  source_files_skipped: int = 0,
-                 cve_lookup_status: dict | None = None) -> dict:
+                 cve_lookup_status: dict | None = None,
+                 domain_discovery: dict | None = None) -> dict:
     """Normalize, deduplicate, sort, and summarize scan results."""
     unique = {}
     for item in findings:
@@ -74,6 +75,7 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
         },
         "software_components": software_components or [],
         "cve_lookup": cve_lookup_status or {"source": "NVD CVE API 2.0", "status": "not run"},
+        "domain_discovery": domain_discovery or {"enabled": False, "hosts": []},
         "pages": pages,
         "findings": [{**item.to_dict(), **finding_identity(item.to_dict())} for item in normalized],
         "identity": report_identity(target, pages),
@@ -95,7 +97,8 @@ def write_report(path: str, *, target: str, requests_made: int,
                  tls_probes: int = 0,
                  source_files_reviewed: int = 0,
                  source_files_skipped: int = 0,
-                 cve_lookup_status: dict | None = None) -> dict:
+                 cve_lookup_status: dict | None = None,
+                 domain_discovery: dict | None = None) -> dict:
     payload = build_report(
         target=target,
         requests_made=requests_made,
@@ -108,6 +111,7 @@ def write_report(path: str, *, target: str, requests_made: int,
         source_files_reviewed=source_files_reviewed,
         source_files_skipped=source_files_skipped,
         cve_lookup_status=cve_lookup_status,
+        domain_discovery=domain_discovery,
     )
     Path(path).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return payload
