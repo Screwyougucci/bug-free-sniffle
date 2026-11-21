@@ -15,6 +15,7 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+from urllib.parse import urlsplit
 from tkinter import messagebox, ttk
 from .identity import target_id, resource_id
 from .app_utils import parse_target_url
@@ -430,6 +431,16 @@ class DarthScannerApp:
             box.insert("1.0", raw)
             box.configure(state="disabled")
 
+        source_url = item.get("source_url") or item.get("url") or history.get("target", "")
+        try:
+            parsed_source = urlsplit(str(source_url))
+            source_site = parsed_source.netloc or parsed_source.path.split("/")[0]
+            if not source_site:
+                source_site = "Not available"
+        except ValueError:
+            source_site = "Not available"
+
+        section("Source website", source_site, "#70d6b0")
         section("What the scanner detected", item.get("description"))
         section("Why this may matter", item.get("impact") or
                 "This is an automated observation, not proof of exploitability. Review the evidence and affected component in context before treating it as a vulnerability.",
