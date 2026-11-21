@@ -1,0 +1,3 @@
+Darth Scanner 0.13.0
+Windows x64 desktop build source branch: v0.13.0-recursive-subdomain-discovery
+This file records the source branch for the automated Windows desktop package.
