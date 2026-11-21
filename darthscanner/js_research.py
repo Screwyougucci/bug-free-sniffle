@@ -9,7 +9,7 @@ from html.parser import HTMLParser
 import re
 from urllib.parse import urljoin, urlsplit
 
-from .checks import Finding
+from .checks import Finding, source_excerpt_for
 
 
 class _ScriptSourceParser(HTMLParser):
@@ -166,4 +166,8 @@ def inspect_javascript_source(source_url: str, source: str) -> list[Finding]:
             "CWE-346", 65,
         )
 
+    class _SourceResponse:
+        text = source
+    for finding in findings:
+        finding.source_excerpt, finding.source_line = source_excerpt_for(_SourceResponse(), finding.title)
     return findings
