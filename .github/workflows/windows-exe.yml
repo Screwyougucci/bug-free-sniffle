@@ -3,6 +3,8 @@ name: Windows desktop build
 on:
   workflow_dispatch:
   push:
+    branches:
+      - "v0.9.1-windows-exe"
     tags:
       - "v*"
 
