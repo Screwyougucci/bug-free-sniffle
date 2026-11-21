@@ -114,6 +114,7 @@ def update_finding_registry(
                 "cwe_ids": list(finding.get("cwe_ids", [])),
                 "cvss_score": finding.get("cvss_score"),
                 "cvss_version": finding.get("cvss_version"),
+                "cvss_vector": finding.get("cvss_vector"),
                 "references": list(finding.get("references", [])),
                 "affected_component": finding.get("affected_component"),
             }
@@ -145,6 +146,7 @@ def update_finding_registry(
                 "cwe_ids": list(finding.get("cwe_ids", entry.get("cwe_ids", []))),
                 "cvss_score": finding.get("cvss_score", entry.get("cvss_score")),
                 "cvss_version": finding.get("cvss_version", entry.get("cvss_version")),
+                "cvss_vector": finding.get("cvss_vector", entry.get("cvss_vector")),
                 "references": list(finding.get("references", entry.get("references", []))),
                 "affected_component": finding.get("affected_component", entry.get("affected_component")),
             })
