@@ -59,6 +59,8 @@ class DiscoveryIdentityTests(unittest.TestCase):
         }
         first = update_finding_registry(history, [finding], now="2026-01-01T00:00:00Z")
         self.assertEqual(first["new"], ["F-1"])
+        self.assertEqual(history["finding_registry"]["F-1"]["title"], "Missing CSP")
+        self.assertEqual(history["finding_registry"]["F-1"]["severity"], "low")
         second = update_finding_registry(history, [finding], now="2026-01-02T00:00:00Z")
         self.assertEqual(second["recurring"], ["F-1"])
         changed = update_finding_registry(

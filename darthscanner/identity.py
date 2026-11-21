@@ -82,6 +82,7 @@ def update_finding_registry(
     recurring = []
     for finding in findings:
         identity = finding_identity(finding)
+        url = normalize_url(finding.get("url", ""))
         fid = identity["finding_id"]
         signature = _digest(
             "sig",
@@ -99,6 +100,13 @@ def update_finding_registry(
                 "last_seen": timestamp,
                 "occurrences": 1,
                 "signature": signature,
+                "title": str(finding.get("title", "Untitled")),
+                "severity": str(finding.get("severity", "info")),
+                "category": str(finding.get("category", "unknown")),
+                "url": url,
+                "description": str(finding.get("description", "")),
+                "evidence": str(finding.get("evidence", "")),
+                "remediation": str(finding.get("remediation", "")),
             }
             newly_seen.append(fid)
         else:
@@ -114,6 +122,15 @@ def update_finding_registry(
             entry["occurrences"] = int(entry.get("occurrences", 0)) + 1
             entry["signature"] = signature
             entry.update(identity)
+            entry.update({
+                "title": str(finding.get("title", entry.get("title", "Untitled"))),
+                "severity": str(finding.get("severity", entry.get("severity", "info"))),
+                "category": str(finding.get("category", entry.get("category", "unknown"))),
+                "url": url,
+                "description": str(finding.get("description", entry.get("description", ""))),
+                "evidence": str(finding.get("evidence", entry.get("evidence", ""))),
+                "remediation": str(finding.get("remediation", entry.get("remediation", ""))),
+            })
         registry[fid] = entry
         round_seen.add(fid)
 
