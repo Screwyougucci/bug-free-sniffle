@@ -6,17 +6,15 @@ and generate an exact-host scope file for the entered URL.
 """
 from __future__ import annotations
 
-from datetime import datetime
 import json
 import os
 from pathlib import Path
 import queue
-import re
 import subprocess
 import sys
 import threading
 import tkinter as tk
-from tkinter import messagebox, ttk, filedialog
+from tkinter import messagebox, ttk
 from .identity import target_id, resource_id
 from .app_utils import parse_target_url
 
