@@ -108,6 +108,7 @@ def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
         tls_probes=tls_probes,
         source_files_reviewed=source_files_reviewed,
         source_files_skipped=source_files_skipped,
+        cve_lookup_status=cve_lookup_status,
     )
 
 def main(argv: list[str] | None = None) -> int:
@@ -254,10 +255,24 @@ def main(argv: list[str] | None = None) -> int:
                     components_by_cpe[component.cpe] = component
             components = list(components_by_cpe.values())
 
+            cve_lookup_status = None
             if args.nvd_json:
                 feed = load_nvd_feed(args.nvd_json)
                 findings.extend(match_cves(components, feed))
+                cve_lookup_status = {"source": "Local NVD JSON feed", "components_seen": len(components), "records_loaded": len(feed)}
                 print(f"CVE matching: {len(components)} component(s) against {len(feed)} NVD record(s).")
+            elif not args.no_cve_lookup and components and profile in {"full", "web"} and focus in {"all", "fingerprint"}:
+                cve_findings, cve_lookup_status = lookup_cves_for_components(components, max_network_lookups=1)
+                findings.extend(cve_findings)
+                print(
+                    "NVD CVE lookup: "
+                    f"{cve_lookup_status['components_checked']}/{cve_lookup_status['components_seen']} component(s) checked; "
+                    f"{len(cve_findings)} candidate CVE match(es); "
+                    f"{cve_lookup_status['network_lookups']} network lookup(s), "
+                    f"{cve_lookup_status['cache_hits']} cache hit(s)."
+                )
+                for error in cve_lookup_status["errors"]:
+                    print(f"NVD lookup unavailable: {error}")
 
             pages = []
             for r in responses:
@@ -292,6 +307,7 @@ def main(argv: list[str] | None = None) -> int:
                 args, target=args.target, requests_made=client.requests_made,
                 pages=pages, findings=findings, software=software,
                 exposure_paths_checked=exposure_paths_checked, tls_probes=tls_probes,
+                cve_lookup_status=cve_lookup_status,
             )
             print(f"Profile: {profile}; focus: {focus}. Reviewed {len(responses)} page/resource response(s) and {len(script_responses)} same-origin JavaScript file(s); {client.requests_made} HTTP request(s).")
             print(f"Exposure paths checked: {exposure_paths_checked}; TLS probes attempted: {tls_probes}.")
