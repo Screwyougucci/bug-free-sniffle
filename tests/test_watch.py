@@ -45,7 +45,7 @@ class WatchProfileTests(unittest.TestCase):
         }]}
         self.assertEqual(
             eligible_focuses(report),
-            ["headers", "fingerprint", "cookies", "cors", "html", "browser", "javascript"],
+            ["headers", "cookies", "cors", "html", "browser", "javascript", "fingerprint"],
         )
         self.assertEqual(
             set(discover_signals(report)),
