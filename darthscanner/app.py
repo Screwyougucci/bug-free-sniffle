@@ -275,6 +275,7 @@ class DarthScannerApp:
                     output_dir=str(output_dir),
                     interval=MIN_INTERVAL,
                     stop_event=self.stop_event,
+                    cve_lookup=cve_lookup,
                 )
             self.events.put(("exit", f"Watch stopped (status {code})."))
         except Exception as exc:
