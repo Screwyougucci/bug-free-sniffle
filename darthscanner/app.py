@@ -458,6 +458,11 @@ class DarthScannerApp:
         section("Why this may matter", item.get("impact") or
                 "This is an automated observation, not proof of exploitability. Review the evidence and affected component in context before treating it as a vulnerability.",
                 "#f4c66b")
+        section("Exact source code / response snippet",
+                (f"Line {item.get('source_line')}:\\n" if item.get("source_line") else "")
+                + (item.get("source_excerpt") or
+                   "No source-code snippet applies to this finding. The evidence is based on response headers or metadata."),
+                "#70d6b0")
         section("Evidence collected", item.get("evidence"), "#70d6b0")
         section("Recommended remediation", item.get("remediation"))
         section("Affected URL", item.get("url"))
