@@ -231,7 +231,7 @@ def run_watch(
     seen = set(str(item) for item in history["seen_finding_ids"])
     cycle = 0
     print("Darth Scanner adaptive watch started. Use STOP in the desktop app to end the watch.", flush=True)
-    print("The scheduler ranks applicable checks from observed evidence and past outcomes; scope remains fixed to the authorized target.", flush=True)
+    print("The scheduler ranks applicable checks from observed evidence and past outcomes; scope remains fixed to the explicitly authorized host/root-domain boundary.", flush=True)
     try:
         while (cycles is None or cycle < cycles) and not (stop_event and stop_event.is_set()):
             eligible = history.get("eligible_focuses") or ["headers", "fingerprint"]
