@@ -239,11 +239,22 @@ class DarthScannerApp:
         except Exception as exc:
             self.events.put(("exit", f"Could not start scanner: {exc}"))
 
+    def _terminate_process_tree(self, process):
+        if process is None or process.poll() is not None:
+            return
+        if sys.platform == "win32":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+            )
+        else:
+            process.terminate()
+
     def stop_watch(self):
         process = self.process
         if process is not None and process.poll() is None:
             self._log("Stopping watch...")
-            process.terminate()
+            self._terminate_process_tree(process)
         self._set_running(False)
 
     def _poll_events(self):
@@ -350,7 +361,7 @@ class DarthScannerApp:
         if process is not None and process.poll() is None:
             if not messagebox.askyesno("Stop scanner?", "Stop the active watch and close Darth Scanner?"):
                 return
-            process.terminate()
+            self._terminate_process_tree(process)
         self.root.destroy()
 
 
