@@ -13,6 +13,8 @@ import subprocess
 import sys
 import time
 
+from .identity import update_finding_registry
+
 FOCUSES = ("headers", "cookies", "cors", "redirects", "html", "browser", "javascript", "fingerprint")
 # Kept for compatibility with early 0.8 development tests.
 PROFILES = FOCUSES
@@ -167,6 +169,8 @@ def _load_history(path: Path) -> dict:
         "focus_stats": {},
         "discovery_signals": [],
         "finding_categories": [],
+        "finding_registry": {},
+        "round_seen_finding_ids": [],
     }
     if not path.exists():
         return empty
@@ -183,6 +187,10 @@ def _load_history(path: Path) -> dict:
             data[key] = []
     if not isinstance(data.get("focus_stats"), dict):
         data["focus_stats"] = {}
+    if not isinstance(data.get("finding_registry"), dict):
+        data["finding_registry"] = {}
+    if not isinstance(data.get("round_seen_finding_ids"), list):
+        data["round_seen_finding_ids"] = []
     return data
 
 
@@ -216,6 +224,8 @@ def run_watch(
             "focus_stats": {},
             "discovery_signals": [],
             "finding_categories": [],
+            "finding_registry": {},
+            "round_seen_finding_ids": [],
         })
     seen = set(str(item) for item in history["seen_finding_ids"])
     cycle = 0
@@ -267,16 +277,28 @@ def run_watch(
             next_eligible = eligible_focuses(report)
             if focus in next_eligible and focus not in completed_focuses:
                 completed_focuses.append(focus)
-            if all(item in completed_focuses for item in next_eligible):
+            round_complete = all(item in completed_focuses for item in next_eligible)
+            if round_complete:
                 completed_focuses = []
                 print("All currently applicable checks completed; a new evidence-ranked review round will begin.", flush=True)
 
             findings = report.get("findings", [])
-            new_items = [item for item in findings if item.get("finding_id") and item["finding_id"] not in seen]
+            lifecycle = update_finding_registry(history, findings, complete_round=round_complete)
+            new_items = lifecycle["new"]
             for item in findings:
                 finding_id = item.get("finding_id")
                 if finding_id:
                     seen.add(finding_id)
+            registry = history.get("finding_registry", {})
+            for item in report.get("findings", []):
+                entry = registry.get(item.get("finding_id"))
+                if entry:
+                    item["identity_status"] = entry["status"]
+                    item["first_seen"] = entry["first_seen"]
+                    item["last_seen"] = entry["last_seen"]
+                    item["occurrences"] = entry["occurrences"]
+            report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+
             stats = history.setdefault("focus_stats", {})
             focus_stats = stats.setdefault(focus, {"attempts": 0, "finding_count": 0, "empty_runs": 0})
             focus_stats["attempts"] = int(focus_stats.get("attempts", 0)) + 1
@@ -303,7 +325,8 @@ def run_watch(
                 "updated_at": datetime.now(timezone.utc).isoformat(),
             })
             _save_history(history_path, history)
-            print(f"New finding IDs this run: {len(new_items)}; total unique IDs seen: {len(seen)}.", flush=True)
+            print(f"Discovery identities — new: {len(lifecycle['new'])}, recurring: {len(lifecycle['recurring'])}, changed: {len(lifecycle['changed'])}, resolved after full round: {len(lifecycle['resolved'])}.", flush=True)
+            print(f"Total unique finding IDs seen: {len(seen)}.", flush=True)
             print(f"Applicable analyses: {', '.join(next_eligible)}", flush=True)
             if cycles is None or cycle < cycles:
                 print(f"Next evidence-ranked analysis in {interval} seconds.", flush=True)

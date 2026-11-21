@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 
 from . import __version__
+from .identity import finding_identity, report_identity
 
 
 _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4, "none": 5}
@@ -72,7 +73,8 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
         },
         "software_components": software_components or [],
         "pages": pages,
-        "findings": [item.to_dict() for item in normalized],
+        "findings": [{**item.to_dict(), **finding_identity(item.to_dict())} for item in normalized],
+        "identity": report_identity(target, pages),
         "fuzz_observations": fuzz_observations or [],
         "disclaimer": (
             "CVE matches are candidates based on available CPE/version data and must be "

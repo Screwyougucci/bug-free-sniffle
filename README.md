@@ -4,9 +4,9 @@ A conventional Python security scanner for websites and server software you own 
 
 > No scanner can guarantee a fixed number of vulnerabilities. Bug-Free Sniffle reports observed weaknesses and candidate CVE matches with evidence; it never invents findings to reach a target count.
 
-## Version 0.8.0 capabilities
+## Version 0.8.1 capabilities
 
-Version 0.8.0 adds content-aware adaptive watch. It selects one focused analysis per cycle, learns which checks apply from response metadata, remembers completed checks and unique finding IDs, and resets its check queue when the response changes. It stays on the exact authorized target and uses only the bounded web GET/crawl path; it does not rotate into host-wide TLS, HTTP-method, or sensitive-path probes. The minimum watch interval is 30 seconds.
+Version 0.8.0 adds content-aware adaptive watch. Version 0.8.1 adds persistent discovery identities: stable target, resource, behavior, evidence, test, and finding IDs, plus lifecycle tracking for new, recurring, changed, and resolved findings. Watch history stores only metadata and finding evidence summaries, not response bodies, cookies, or credentials. A finding is marked resolved only after a complete applicable check round finishes without observing it. It selects one focused analysis per cycle, learns which checks apply from response metadata, remembers completed checks and unique finding IDs, and resets its check queue when the response changes. It stays on the exact authorized target and uses only the bounded web GET/crawl path; it does not rotate into host-wide TLS, HTTP-method, or sensitive-path probes. The minimum watch interval is 30 seconds.
 
 
 
@@ -98,7 +98,7 @@ An unknown vulnerability can also be investigated through the bounded `fuzz` com
 ### 8. Browser-side XSS and source review indicators\n\nThe scanner passively inspects HTML already fetched by the bounded crawler. It looks for inline event handlers, `javascript:` URLs, source-and-sink co-occurrence in inline scripts (for example, browser-controlled URL sources alongside HTML-string sinks), and same-origin source-map references. It never executes JavaScript, injects payloads, or fetches source maps. These findings are review leads: co-occurrence is not proof of data flow or exploitable XSS.\n\n### 9. Detailed findings and JSON reporting
 
 Every finding can include:
-- Stable finding ID.
+- Stable finding ID plus separate target, resource, behavior, evidence, and test IDs.
 - Description, impact, affected URL/component, and observed evidence.
 - Severity, qualitative confidence, and a numeric confidence score.
 - CWE identifier(s) with MITRE references where mapped.
@@ -106,6 +106,21 @@ Every finding can include:
 - Remediation summary and practical remediation steps.
 
 Each scan writes a single UTF-8 `darth-report.json` file designed to open cleanly in Notepad. It contains findings, evidence, coverage totals, scanned page/resource metadata, and optional CVE matches. The scanner does not generate HTML or CSV reports.
+
+## Desktop dashboard (Windows, Linux, macOS with Tk support)
+
+Darth Scanner 0.9.0 includes a persistent local desktop dashboard. It lets you enter a website URL, start or stop an adaptive watch, review unique findings, inspect each finding's IDs/evidence/history, and reopen the same saved target history after restarting the app. The app uses Python's built-in Tkinter; no web server or third-party GUI package is required. On Windows, launch it with `darth-scanner-app` from PowerShell after installation.
+
+The app prompts you to confirm that you own the site or have explicit permission before starting. It creates a separate local scope for the exact hostname entered (not its subdomains), uses bounded read-only web checks, and keeps reports/history under `%LOCALAPPDATA%\\DarthScanner`. Continuous watch runs until you press **STOP** or close the app. The minimum interval is 30 seconds. Entering a URL does not itself grant permission to scan it.
+
+### Launch on Windows
+
+```powershell
+py -3 -m pip install -e .
+darth-scanner-app
+```
+
+If Windows reports that Tkinter is unavailable, install/use a standard Python distribution that includes Tcl/Tk.
 
 ## Install
 
@@ -152,7 +167,7 @@ For a target you own or are explicitly authorized to assess, run adaptive analys
 darth-scanner watch --target https://your-authorized-host.example --scope scope.json --acknowledge-authorization --output-dir darth-watch-reports --interval 30
 ```
 
-Each cycle performs one focused, read-only analysis selected from the previous response: headers/CSP, cookies, CORS metadata, redirect metadata, HTML patterns, passive browser-side indicators, same-origin JavaScript static review, or software fingerprinting. Checks that do not apply to the observed content are skipped. The scheduler remembers completed checks for the current response fingerprint and starts a new round after applicable checks finish; a changed response resets the queue. It writes one timestamped JSON report per cycle and stores history in `history.json`. It never submits forms, executes JavaScript, injects exploit payloads, invokes unsafe HTTP methods, probes unrelated paths, or follows links outside the exact origin. The minimum interval is 30 seconds. Stop with Ctrl+C.
+Each cycle performs one focused, read-only analysis selected from the previous response: headers/CSP, cookies, CORS metadata, redirect metadata, HTML patterns, passive browser-side indicators, same-origin JavaScript static review, or software fingerprinting. Checks that do not apply to the observed content are skipped. The scheduler remembers completed checks for the current response fingerprint and starts a new round after applicable checks finish; a changed response resets the queue. It writes one timestamped JSON report per cycle and stores history and the finding lifecycle registry in `history.json`. It never submits forms, executes JavaScript, injects exploit payloads, invokes unsafe HTTP methods, probes unrelated paths, or follows links outside the exact origin. The minimum interval is 30 seconds. Stop with Ctrl+C.
 
 Run a single focused analysis manually with `darth-scanner scan --target ... --scope scope.json --acknowledge-authorization --profile web --focus headers`. Available focuses: `headers`, `cookies`, `cors`, `redirects`, `html`, `browser`, `javascript`, and `fingerprint`. Use `--focus all` for the combined web analysis.
 
