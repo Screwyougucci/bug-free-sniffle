@@ -40,6 +40,14 @@ def resource_id(url: str) -> str:
 
 def finding_identity(finding: dict) -> dict:
     url = normalize_url(finding.get("url", ""))
+    evidence_details = finding.get("evidence_details") or {}
+    evidence_fingerprint = json.dumps({
+        "request_method": evidence_details.get("request_method"),
+        "request_url": evidence_details.get("request_url"),
+        "response_status": evidence_details.get("response_status"),
+        "response_body_sha256": evidence_details.get("response_body_sha256"),
+        "response_headers": evidence_details.get("response_headers") or {},
+    }, sort_keys=True, separators=(",", ":"))
     category = str(finding.get("category", "unknown"))
     title = str(finding.get("title", "untitled"))
     kind = str(finding.get("kind", "finding"))
@@ -48,7 +56,7 @@ def finding_identity(finding: dict) -> dict:
         "finding_id": legacy_id,
         "resource_id": resource_id(url),
         "behavior_id": _digest("beh", url, category, title),
-        "evidence_id": _digest("evd", legacy_id, str(finding.get("evidence", "")), str(finding.get("source_excerpt", ""))),
+        "evidence_id": _digest("evd", legacy_id, str(finding.get("evidence", "")), str(finding.get("source_excerpt", "")), evidence_fingerprint),
         "test_id": _digest("tst", category, kind),
     }
 
@@ -90,6 +98,11 @@ def update_finding_registry(
             str(finding.get("title", "")),
             str(finding.get("evidence", "")),
             str(finding.get("source_excerpt", "")),
+            json.dumps({
+                "response_status": (finding.get("evidence_details") or {}).get("response_status"),
+                "response_body_sha256": (finding.get("evidence_details") or {}).get("response_body_sha256"),
+                "response_headers": (finding.get("evidence_details") or {}).get("response_headers") or {},
+            }, sort_keys=True, separators=(",", ":")),
             str(finding.get("remediation", "")),
         )
         previous = registry.get(fid)
@@ -109,6 +122,8 @@ def update_finding_registry(
                 "evidence": str(finding.get("evidence", "")),
                 "source_excerpt": finding.get("source_excerpt"),
                 "source_line": finding.get("source_line"),
+                "evidence_details": dict(finding.get("evidence_details") or {}),
+                "reproduction_steps": list(finding.get("reproduction_steps") or []),
                 "remediation": str(finding.get("remediation", "")),
                 "cve_ids": list(finding.get("cve_ids", [])),
                 "cwe_ids": list(finding.get("cwe_ids", [])),
@@ -141,6 +156,8 @@ def update_finding_registry(
                 "evidence": str(finding.get("evidence", entry.get("evidence", ""))),
                 "source_excerpt": finding.get("source_excerpt", entry.get("source_excerpt")),
                 "source_line": finding.get("source_line", entry.get("source_line")),
+                "evidence_details": dict(finding.get("evidence_details") or entry.get("evidence_details") or {}),
+                "reproduction_steps": list(finding.get("reproduction_steps") or entry.get("reproduction_steps") or []),
                 "remediation": str(finding.get("remediation", entry.get("remediation", ""))),
                 "cve_ids": list(finding.get("cve_ids", entry.get("cve_ids", []))),
                 "cwe_ids": list(finding.get("cwe_ids", entry.get("cwe_ids", []))),

@@ -34,10 +34,15 @@ def _enable_windows_dpi_awareness() -> None:
         import ctypes
         # PROCESS_PER_MONITOR_DPI_AWARE = 2. Prefer the modern API.
         try:
-            ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            # PER_MONITOR_AWARE_V2 (-4) gives modern Windows/Tk the best
+            # chance of crisp rendering when moving between mixed-DPI displays.
+            if not ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+                raise OSError("Per-monitor v2 DPI awareness unavailable")
         except (AttributeError, OSError):
-            # Fallback for older Windows versions.
-            ctypes.windll.user32.SetProcessDPIAware()
+            try:
+                ctypes.windll.shcore.SetProcessDpiAwareness(2)
+            except (AttributeError, OSError):
+                ctypes.windll.user32.SetProcessDPIAware()
     except (AttributeError, OSError):
         # Keep the app usable on systems where DPI APIs are unavailable.
         pass
@@ -570,6 +575,19 @@ class DarthScannerApp:
                    "No source-code snippet applies to this finding. The evidence is based on response headers or metadata."),
                 "#70d6b0")
         section("Evidence collected", item.get("evidence"), "#70d6b0")
+        section("Safe proof of concept / reproduction steps",
+                "\n".join(item.get("reproduction_steps") or []) or
+                "No repeatable HTTP steps were generated for this finding.", "#70d6b0")
+        evidence_details = item.get("evidence_details") or {}
+        evidence_lines = [
+            f"{key}: {value}" for key, value in evidence_details.items()
+            if key != "response_headers"
+        ]
+        evidence_lines.append("Response headers:")
+        evidence_lines.extend(
+            f"  {key}: {value}" for key, value in (evidence_details.get("response_headers") or {}).items()
+        )
+        section("Request / response evidence", "\n".join(evidence_lines), "#8fc5ff")
         section("Recommended remediation", item.get("remediation"))
         section("Affected URL", item.get("url"))
 

@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from hashlib import sha256
 from html.parser import HTMLParser
 import re
 from http.cookies import SimpleCookie
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 
 @dataclass
@@ -32,6 +33,8 @@ class Finding:
     confidence_score: int | None = None
     source_excerpt: str | None = None
     source_line: int | None = None
+    evidence_details: dict = field(default_factory=dict)
+    reproduction_steps: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         if self.confidence_score is None:
@@ -113,6 +116,64 @@ def source_excerpt_for(response, title: str) -> tuple[str | None, int | None]:
         excerpt = excerpt[:600] + "…"
     return excerpt.strip(), body.count("\n", 0, start) + 1
 
+
+def _safe_evidence_url(url: str) -> str:
+    """Remove common secret-bearing query values before storing evidence."""
+    parts = urlsplit(str(url))
+    secret_names = ("token", "auth", "password", "passwd", "secret", "api_key", "apikey", "access_key", "code", "session")
+    query = [
+        (key, "[REDACTED]" if any(name in key.lower() for name in secret_names) else value)
+        for key, value in parse_qsl(parts.query, keep_blank_values=True)
+    ]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), ""))
+
+
+def _http_evidence(response) -> tuple[dict, list[str]]:
+    """Build a compact, sanitized, reproducible record without storing response bodies."""
+    safe_url = _safe_evidence_url(response.url)
+    allow_headers = {
+        "content-type", "content-length", "server", "cache-control",
+        "content-security-policy", "content-security-policy-report-only",
+        "strict-transport-security", "x-frame-options", "x-content-type-options",
+        "referrer-policy", "permissions-policy", "access-control-allow-origin",
+        "access-control-allow-credentials", "location", "www-authenticate",
+    }
+    observed = {}
+    for key, value in response.headers.items():
+        normalized_key = key.lower()
+        if normalized_key not in allow_headers:
+            continue
+        if normalized_key == "location":
+            value = _safe_evidence_url(urljoin(response.url, str(value)))
+        observed[normalized_key] = str(value)[:500]
+    body = getattr(response, "body", b"") or b""
+    digest = sha256(body).hexdigest()
+    details = {
+        "capture_time_utc": datetime.now(timezone.utc).isoformat(),
+        "request_method": "GET",
+        "request_url": safe_url,
+        "request_headers": {
+            "User-Agent": "BugFreeSniffle/0.3 (+authorized-security-assessment)",
+            "Accept": "text/html,application/json,text/plain;q=0.9,*/*;q=0.5",
+        },
+        "response_status": response.status,
+        "response_bytes": len(body),
+        "response_elapsed_seconds": round(float(response.elapsed_seconds), 3),
+        "response_content_type": response.headers.get("content-type", ""),
+        "response_headers": observed,
+        "response_body_sha256": digest,
+        "body_saved": False,
+        "redaction_note": "Response body, cookies, authorization headers, and common secret query values are not stored.",
+    }
+    steps = [
+        f"1. Send a read-only GET request to {safe_url}.",
+        f"2. Compare the response status with the recorded status: {response.status}.",
+        f"3. Inspect the listed response headers and compare the response SHA-256: {digest}.",
+        "4. Re-run only within the authorized scope; differences may occur as the site changes.",
+    ]
+    return details, steps
+
+
 def _finding(category: str, title: str, severity: str, confidence: str,
              response, evidence: str, remediation: str,
              kind: str = "finding") -> Finding:
@@ -163,6 +224,7 @@ def _finding(category: str, title: str, severity: str, confidence: str,
 
     references = [f"https://cwe.mitre.org/data/definitions/{item.split('-')[1]}.html"
                   for item in cwe_ids]
+    evidence_details, reproduction_steps = _http_evidence(response)
     return Finding(
         category=category,
         title=title,
@@ -179,6 +241,8 @@ def _finding(category: str, title: str, severity: str, confidence: str,
         references=references,
         source_excerpt=source_excerpt_for(response, title)[0],
         source_line=source_excerpt_for(response, title)[1],
+        evidence_details=evidence_details,
+        reproduction_steps=reproduction_steps,
     )
 
 
