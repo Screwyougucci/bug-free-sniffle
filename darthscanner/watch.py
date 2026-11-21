@@ -9,8 +9,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 from pathlib import Path
-import subprocess
 import sys
+from threading import Event
 import time
 
 from .identity import update_finding_registry
@@ -204,6 +204,7 @@ def _save_history(path: Path, history: dict) -> None:
 def run_watch(
     *, target: str, scope_path: str, acknowledge_authorization: bool,
     output_dir: str, interval: int = 30, cycles: int | None = None,
+    stop_event: Event | None = None,
 ) -> int:
     """Run evidence-driven, read-only focused analysis until interrupted."""
     if interval < 30:
@@ -229,10 +230,10 @@ def run_watch(
         })
     seen = set(str(item) for item in history["seen_finding_ids"])
     cycle = 0
-    print("Darth Scanner adaptive watch started. Press Ctrl+C to stop.", flush=True)
+    print("Darth Scanner adaptive watch started. Use STOP in the desktop app to end the watch.", flush=True)
     print("The scheduler ranks applicable checks from observed evidence and past outcomes; scope remains fixed to the authorized target.", flush=True)
     try:
-        while cycles is None or cycle < cycles:
+        while (cycles is None or cycle < cycles) and not (stop_event and stop_event.is_set()):
             eligible = history.get("eligible_focuses") or ["headers", "fingerprint"]
             completed_focuses = history.get("completed_focuses") or []
             signals = set(history.get("discovery_signals") or [])
@@ -242,20 +243,18 @@ def run_watch(
             stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
             report_path = folder / f"cycle-{total_cycle:06d}-{focus}-{stamp}.json"
             command = [
-                sys.executable, "-m", "darthscanner", "scan",
-                "--target", target,
-                "--scope", scope_path,
-                "--profile", "web",
-                "--focus", focus,
-                "--output", str(report_path),
+                "scan", "--target", target, "--scope", scope_path,
+                "--profile", "web", "--focus", focus, "--output", str(report_path),
             ]
             if acknowledge_authorization:
                 command.append("--acknowledge-authorization")
             print(f"\nCycle {total_cycle}: selected {focus} (priority {score:.2f}) from evidence: {', '.join(sorted(signals)) or 'initial discovery'}", flush=True)
-            completed = subprocess.run(command, check=False)
-            if completed.returncode != 0:
-                print(f"Watch stopped: scan exited with status {completed.returncode}.", file=sys.stderr, flush=True)
-                return completed.returncode
+            # Lazy import avoids the cli <-> watch import cycle. Scan in-process.
+            from .cli import main as cli_main
+            return_code = cli_main(command)
+            if return_code != 0:
+                print(f"Watch stopped: scan returned status {return_code}.", file=sys.stderr, flush=True)
+                return return_code
             try:
                 report = json.loads(report_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError) as exc:
@@ -330,8 +329,13 @@ def run_watch(
             print(f"Applicable analyses: {', '.join(next_eligible)}", flush=True)
             if cycles is None or cycle < cycles:
                 print(f"Next evidence-ranked analysis in {interval} seconds.", flush=True)
-                time.sleep(interval)
+                if stop_event is not None:
+                    stop_event.wait(interval)
+                else:
+                    time.sleep(interval)
     except KeyboardInterrupt:
         print("\nDarth Scanner adaptive watch stopped by user.", flush=True)
         return 130
+    if stop_event is not None and stop_event.is_set():
+        print("\nDarth Scanner watch stopped from the desktop app.", flush=True)
     return 0
