@@ -107,6 +107,7 @@ def write_report(path: str, *, target: str, requests_made: int,
         tls_probes=tls_probes,
         source_files_reviewed=source_files_reviewed,
         source_files_skipped=source_files_skipped,
+        cve_lookup_status=cve_lookup_status,
     )
     Path(path).write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return payload
