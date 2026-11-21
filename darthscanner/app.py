@@ -161,7 +161,8 @@ class DarthScannerApp:
             self.table.heading(col, text=labels[col])
             self.table.column(col, width=widths[col], minwidth=60, anchor="w")
         self.table.pack(fill="both", expand=True)
-        self.table.bind("<Double-1>", self.show_finding_details)
+        self.table.bind("<<TreeviewSelect>>", self.show_finding_details)
+        self.table.bind("<Return>", self.show_finding_details)
 
         log_panel = tk.Frame(split, bg="#151d2a", padx=12, pady=10)
         split.add(log_panel, minsize=130)
@@ -351,6 +352,7 @@ class DarthScannerApp:
             ))
 
     def show_finding_details(self, _event=None):
+        """Show a structured analyst view when a finding is selected."""
         selected = self.table.selection()
         if not selected or self.current_folder is None:
             return
@@ -363,25 +365,112 @@ class DarthScannerApp:
             item = history.get("finding_registry", {}).get(finding_id, {})
         except (OSError, json.JSONDecodeError):
             return
+        if not item:
+            return
+
         detail = tk.Toplevel(self.root)
-        detail.title("Discovery details")
-        detail.geometry("720x520")
-        detail.configure(bg="#151d2a")
-        body = tk.Text(detail, bg="#0c121c", fg="#e8edf5", insertbackground="white",
-                       relief="flat", wrap="word", padx=14, pady=12, font=("Consolas", 9))
-        body.pack(fill="both", expand=True, padx=12, pady=12)
+        detail.title("Finding intelligence | Darth Scanner")
+        detail.geometry("920x740")
+        detail.minsize(720, 560)
+        detail.configure(bg="#0b1019")
+        detail.transient(self.root)
+
+        severity = str(item.get("severity", "unknown")).upper()
+        colors = {
+            "CRITICAL": ("#4b1720", "#ff7185"),
+            "HIGH": ("#49251b", "#ff9b72"),
+            "MEDIUM": ("#44351a", "#f4c66b"),
+            "LOW": ("#183b35", "#70d6b0"),
+            "INFO": ("#1b3048", "#8fc5ff"),
+        }
+        badge_bg, badge_fg = colors.get(severity, ("#263247", "#c4d0e2"))
+
+        shell = tk.Frame(detail, bg="#0b1019")
+        shell.pack(fill="both", expand=True)
+        canvas = tk.Canvas(shell, bg="#0b1019", highlightthickness=0)
+        scroll = ttk.Scrollbar(shell, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        page = tk.Frame(canvas, bg="#0b1019", padx=24, pady=22)
+        page_id = canvas.create_window((0, 0), window=page, anchor="nw")
+        page.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(page_id, width=e.width))
+
+        hero = tk.Frame(page, bg="#111b29", padx=20, pady=18,
+                        highlightthickness=1, highlightbackground="#293b52")
+        hero.pack(fill="x", pady=(0, 14))
+        tk.Label(hero, text="DARTH SCANNER  /  FINDING INTELLIGENCE",
+                 bg="#111b29", fg="#8fa4bf", font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        tk.Label(hero, text=str(item.get("title", "Untitled finding")),
+                 bg="#111b29", fg="#f4f7fb", font=("Segoe UI", 19, "bold"),
+                 wraplength=800, justify="left").pack(anchor="w", pady=(9, 12))
+        chips = tk.Frame(hero, bg="#111b29")
+        chips.pack(anchor="w")
+        tk.Label(chips, text="  " + severity + "  ", bg=badge_bg, fg=badge_fg,
+                 font=("Segoe UI", 9, "bold"), padx=7, pady=4).pack(side="left", padx=(0, 7))
+        tk.Label(chips, text="  " + str(item.get("status", "unknown")).upper() + "  ",
+                 bg="#24364d", fg="#c8d8ec", font=("Segoe UI", 9, "bold"),
+                 padx=7, pady=4).pack(side="left")
+        tk.Label(hero, text="Category: " + str(item.get("category", "unknown")) +
+                 "    |    Seen: " + str(item.get("occurrences", 0)) + " time(s)",
+                 bg="#111b29", fg="#aab9cb", font=("Segoe UI", 9)).pack(anchor="w", pady=(12, 0))
+
+        def section(title, value, accent="#8fc5ff"):
+            card = tk.Frame(page, bg="#141e2d", padx=16, pady=13,
+                            highlightthickness=1, highlightbackground="#26364b")
+            card.pack(fill="x", pady=(0, 12))
+            tk.Label(card, text=title.upper(), bg="#141e2d", fg=accent,
+                     font=("Segoe UI", 9, "bold")).pack(anchor="w")
+            raw = str(value or "Not available")
+            box = tk.Text(card, height=max(2, min(8, len(raw) // 95 + 2)),
+                          bg="#0e1724", fg="#e4ebf5", relief="flat", wrap="word",
+                          padx=11, pady=9, font=("Segoe UI", 10), borderwidth=0)
+            box.pack(fill="x", pady=(8, 0))
+            box.insert("1.0", raw)
+            box.configure(state="disabled")
+
+        section("What the scanner detected", item.get("description"))
+        section("Why this may matter", item.get("impact") or
+                "This is an automated observation, not proof of exploitability. Review the evidence and affected component in context before treating it as a vulnerability.",
+                "#f4c66b")
+        section("Evidence collected", item.get("evidence"), "#70d6b0")
+        section("Recommended remediation", item.get("remediation"))
+        section("Affected URL", item.get("url"))
+
+        meta = tk.Frame(page, bg="#141e2d", padx=16, pady=13,
+                        highlightthickness=1, highlightbackground="#26364b")
+        meta.pack(fill="x", pady=(0, 12))
+        tk.Label(meta, text="TRACKING AND HISTORY", bg="#141e2d", fg="#8fa4bf",
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, 8))
         fields = [
-            ("Title", item.get("title")), ("Status", item.get("status")),
-            ("Severity", item.get("severity")), ("Category", item.get("category")),
-            ("Finding ID", item.get("finding_id")), ("Resource ID", item.get("resource_id")),
-            ("Behavior ID", item.get("behavior_id")), ("Evidence ID", item.get("evidence_id")),
-            ("Test ID", item.get("test_id")), ("URL", item.get("url")),
-            ("First seen", item.get("first_seen")), ("Last seen", item.get("last_seen")),
-            ("Occurrences", item.get("occurrences")), ("Description", item.get("description")),
-            ("Evidence", item.get("evidence")), ("Remediation", item.get("remediation")),
+            ("Finding ID", "finding_id"), ("Resource ID", "resource_id"),
+            ("Behavior ID", "behavior_id"), ("Evidence ID", "evidence_id"),
+            ("Test ID", "test_id"), ("First seen", "first_seen"),
+            ("Last seen", "last_seen"), ("Occurrences", "occurrences"),
         ]
-        body.insert("end", "\n\n".join(f"{label}:\n{value or 'Not available'}" for label, value in fields))
-        body.configure(state="disabled")
+        for label, key in fields:
+            row = tk.Frame(meta, bg="#141e2d")
+            row.pack(fill="x", pady=2)
+            tk.Label(row, text=label, width=17, anchor="w", bg="#141e2d",
+                     fg="#8fa4bf", font=("Segoe UI", 9)).pack(side="left")
+            tk.Label(row, text=str(item.get(key) or "Not available"), anchor="w",
+                     bg="#141e2d", fg="#dce5f0", font=("Consolas", 9),
+                     wraplength=650, justify="left").pack(side="left", fill="x", expand=True)
+
+        footer = tk.Frame(page, bg="#0b1019")
+        footer.pack(fill="x", pady=(2, 12))
+        tk.Label(footer, text="Automated findings require human review. Severity is an estimate.",
+                 bg="#0b1019", fg="#8292a8", font=("Segoe UI", 8)).pack(side="left")
+        tk.Button(footer, text="CLOSE", command=detail.destroy, bg="#293b52",
+                  fg="#f4f7fb", activebackground="#354b67", relief="flat",
+                  padx=18, pady=8, font=("Segoe UI", 9, "bold")).pack(side="right")
+
+        def wheel(event):
+            if getattr(event, "delta", 0):
+                canvas.yview_scroll(int(-event.delta / 120), "units")
+        canvas.bind_all("<MouseWheel>", wheel)
+        detail.bind("<Destroy>", lambda _e: canvas.unbind_all("<MouseWheel>"))
 
     def open_data_folder(self):
         folder = self.current_folder or app_data_dir()
