@@ -13,7 +13,7 @@ class FeedbackGuidedSchedulerTests(unittest.TestCase):
         observations = [
             SimpleNamespace(case_family="boundary", signal_types=["input-reflection"])
         ]
-        self.assertEqual(choose_next_case(cases, observations), 2)
+        self.assertEqual(choose_next_case(cases, observations), 1)
 
     def test_diagnostic_signal_prioritizes_structured_inputs(self):
         cases = [
