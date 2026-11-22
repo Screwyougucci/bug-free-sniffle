@@ -49,6 +49,12 @@ class ProfessionalFuzzerTests(unittest.TestCase):
             ["q", "page"],
         )
 
+    def test_secret_like_parameters_are_not_auto_discovered(self):
+        self.assertEqual(
+            discover_query_parameters("https://example.test/?q=hello&session=secret&access_token=private"),
+            ["q"],
+        )
+
     def test_report_url_redacts_secret_query_values(self):
         safe = sanitize_url("https://example.test/?q=hello&access_token=private")
         self.assertIn("q=hello", safe)
