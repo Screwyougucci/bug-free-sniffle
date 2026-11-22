@@ -82,7 +82,12 @@ def validate_cvss_metric(score, version: str | None, vector: str | None) -> dict
         result["status"] = "missing-score-or-vector"
         return result
     if str(version or "").startswith("3.1") and str(vector).startswith("CVSS:3.1/"):
-        calculated = calculate_cvss31(vector)
+        try:
+            calculated = calculate_cvss31(vector)
+        except ValueError:
+            result["status"] = "malformed-vector"
+            result["note"] = "The published CVSS 3.1 vector is malformed or incomplete; verify the source record."
+            return result
         result["calculated_score"] = calculated
         result["status"] = "consistent" if abs(float(score) - calculated) < 0.051 else "score-vector-mismatch"
         if result["status"] == "score-vector-mismatch":
