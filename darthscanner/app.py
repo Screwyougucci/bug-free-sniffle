@@ -358,7 +358,7 @@ class DarthScannerApp:
 
     def _run_github_audit(self, repository: str, output_dir: Path):
         try:
-            findings, summary = audit_github_repository(repository)
+            findings, summary = audit_github_repository(repository, stop_event=self.stop_event)
             payload = {
                 "tool": APP_NAME,
                 "version": "0.22.0",
@@ -629,7 +629,7 @@ class DarthScannerApp:
                 if github_repo:
                     try:
                         self.events.put(("log", f"Starting linked GitHub source review: {github_repo}"))
-                        github_findings, github_summary = audit_github_repository(github_repo)
+                        github_findings, github_summary = audit_github_repository(github_repo, stop_event=self.stop_event)
                         github_dir = output_dir.parent / "github-source-audit"
                         github_dir.mkdir(parents=True, exist_ok=True)
                         github_report = {
