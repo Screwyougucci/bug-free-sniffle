@@ -168,6 +168,7 @@ class DarthScannerApp:
                   bg="#253247", fg="white", relief="flat", padx=11, pady=7,
                   font=("Segoe UI", 9, "bold")).pack(side="left")
         self.authorized_var = tk.BooleanVar(value=False)
+        self.github_auto_var = tk.BooleanVar(value=True)
         self.include_subdomains_var = tk.BooleanVar(value=False)
         self.subdomain_depth_var = tk.IntVar(value=5)
         self.subdomain_hosts_var = tk.IntVar(value=25)
@@ -179,6 +180,13 @@ class DarthScannerApp:
             activebackground="#151d2a", activeforeground="white", selectcolor="#202a3a",
             font=("Segoe UI", 9),
         ).pack(anchor="w", pady=(4, 0))
+        tk.Checkbutton(
+            target_panel,
+            text="Also discover and audit a linked GitHub repository when START WATCH begins",
+            variable=self.github_auto_var, bg="#151d2a", fg="#d7d9e0",
+            activebackground="#151d2a", activeforeground="white", selectcolor="#202a3a",
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(6, 0))
         tk.Checkbutton(
             target_panel,
             text="Include subdomains (passive discovery, then bounded read-only checks)",
@@ -409,6 +417,28 @@ class DarthScannerApp:
             "timeout_seconds": 8,
         }
         scope_path.write_text(json.dumps(scope, indent=2), encoding="utf-8")
+
+        github_repo = self.github_repo_var.get().strip() or None
+        if self.github_auto_var.get() and not github_repo:
+            try:
+                first_page = SafeHttpClient(load_scope(scope_path), max_requests=1).get(target)
+                if first_page.status is not None and first_page.status < 400:
+                    candidates = discover_github_repositories(first_page.text, limit=10)
+                    if candidates:
+                        github_repo = candidates[0]
+                        self.github_repo_var.set(github_repo)
+                        self._log(f"Automatic GitHub discovery found {len(candidates)} candidate(s): {', '.join(candidates)}")
+                        if len(candidates) > 1:
+                            self._log("The first candidate is selected for this run; paste a different repository URL to choose another.")
+            except Exception as exc:
+                self._log(f"GitHub link discovery skipped: {exc}")
+        if github_repo:
+            if not messagebox.askyesno(
+                "Confirm GitHub repository authorization",
+                f"Also perform a read-only source review of:\\n\\n{github_repo}\\n\\n"
+                "Confirm you own this repository or have explicit permission to inspect it. No code will be executed or modified."
+            ):
+                github_repo = None
         self.current_target = target
         self.current_folder = output_dir
         self.url_var.set(target)
@@ -427,7 +457,7 @@ class DarthScannerApp:
         self._set_running(True)
         self.worker = threading.Thread(
             target=self._run_process,
-            args=(target, scope_path, output_dir, bool(self.cve_lookup_var.get())),
+            args=(target, scope_path, output_dir, bool(self.cve_lookup_var.get()), github_repo),
             daemon=True,
         )
         self.worker.start()
@@ -591,11 +621,26 @@ class DarthScannerApp:
         except Exception as exc:
             self.events.put(("exit", f"Fuzz error: {exc}"))
 
-    def _run_process(self, target: str, scope_path: Path, output_dir: Path, cve_lookup: bool):
+    def _run_process(self, target: str, scope_path: Path, output_dir: Path, cve_lookup: bool, github_repo: str | None = None):
         """Run the scheduler in this app process and stream all output into the UI."""
         writer = _QueueWriter(self.events)
         try:
             with redirect_stdout(writer), redirect_stderr(writer):
+                if github_repo:
+                    self.events.put(("log", f"Starting linked GitHub source review: {github_repo}"))
+                    github_findings, github_summary = audit_github_repository(github_repo)
+                    github_dir = output_dir.parent / "github-source-audit"
+                    github_dir.mkdir(parents=True, exist_ok=True)
+                    github_report = {
+                        "tool": APP_NAME, "version": "0.22.0",
+                        "generated_at": datetime.now(timezone.utc).isoformat(),
+                        "repository": github_summary, "finding_count": len(github_findings),
+                        "findings": [item.to_dict() for item in github_findings],
+                        "disclaimer": "Static source matches are unconfirmed review leads. No code was executed and no repository content was modified."
+                    }
+                    github_path = github_dir / "latest-report.json"
+                    github_path.write_text(json.dumps(github_report, indent=2, ensure_ascii=False), encoding="utf-8")
+                    self.events.put(("log", f"GitHub audit complete: {github_summary['files_reviewed']} files, {len(github_findings)} finding(s). Report: {github_path}"))
                 code = run_watch(
                     target=target,
                     scope_path=str(scope_path),
