@@ -61,7 +61,7 @@ def _parser() -> argparse.ArgumentParser:
     fuzz.add_argument("--scope", default="scope.json")
     fuzz.add_argument("--acknowledge-authorization", action="store_true")
     fuzz.add_argument("--max-cases", type=int, default=12, help="1-32 benign mutations per parameter, shared request budget applies")
-    fuzz.add_argument("--max-params", type=int, default=8, help="maximum automatically discovered query parameters (1-20)")
+    fuzz.add_argument("--max-params", type=int, default=8, help="maximum automatically discovered query parameters (1-16)")
     fuzz.add_argument("--output", default="darth-fuzz-report.json")
 
     cve = commands.add_parser("cve", help="match a software inventory against a local NVD 2.0 JSON feed")
@@ -336,8 +336,8 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.max_cases < 1 or args.max_cases > 32:
             raise ValueError("--max-cases must be between 1 and 32.")
-        if not 1 <= args.max_params <= 20:
-            raise ValueError("--max-params must be between 1 and 20.")
+        if not 1 <= args.max_params <= 16:
+            raise ValueError("--max-params must be between 1 and 16.")
         scope.validate_url(args.url)
         parameters = args.param or discover_query_parameters(args.url, args.max_params)
         if not parameters:
