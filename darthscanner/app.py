@@ -345,7 +345,7 @@ class DarthScannerApp:
         tk.Spinbox(controls, from_=1, to=32, width=5, textvariable=cases_var,
                    bg="#202a3a", fg="#f7f9fc", insertbackground="white", relief="flat").pack(side="left", padx=(7, 18))
         tk.Label(controls, text="Max parameters", bg="#151d2a", fg="#aebbd0").pack(side="left")
-        params_var = tk.IntVar(value=8)
+        params_var = tk.IntVar(value=7)
         tk.Spinbox(controls, from_=1, to=7, width=5, textvariable=params_var,
                    bg="#202a3a", fg="#f7f9fc", insertbackground="white", relief="flat").pack(side="left", padx=7)
         tk.Label(panel, text="GET only. No form submission, uploads, credential guessing, redirect following, or exploit payloads. "
@@ -465,7 +465,7 @@ class DarthScannerApp:
                 self.events.put(("log", f"Fuzz run complete: {len(observations)} case(s), {payload['anomaly_count']} anomaly signal(s)."))
                 self.events.put(("log", f"Automatic PoC verification: {len(verification_results)} attempt(s), {repeated_count} repeatable observation(s). No exploit is auto-confirmed."))
                 if payload["parameters_skipped_by_budget"]:
-                    self.events.put(("log", "Parameters skipped to preserve the verification request budget: " + ", ".join(payload["parameters_skipped_by_budget"]))
+                    self.events.put(("log", "Parameters skipped to preserve the verification request budget: " + ", ".join(payload["parameters_skipped_by_budget"])))
                 self.events.put(("log", f"Exploitability triage produced {len(payload['exploitability_analysis'])} unconfirmed hypothesis/hypotheses for manual validation."))
                 self.events.put(("log", f"Created {len(finding_reports)} separate vulnerability-pattern evidence report(s)."))
                 self.events.put(("log", f"Correlated {len(correlations)} same-resource evidence hypothesis/hypotheses."))
