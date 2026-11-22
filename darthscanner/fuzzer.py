@@ -284,7 +284,7 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
         }
         eligible = sorted(set(signals) & repeatable_signals)
         can_verify = (
-            auto_verify and eligible and
+            auto_verify and eligible and baseline_stable and
             not (stop_event and stop_event.is_set()) and
             client.max_requests - client.requests_made > max(0, reserve_requests)
         )
