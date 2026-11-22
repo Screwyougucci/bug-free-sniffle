@@ -135,7 +135,7 @@ def audit_github_repository(repository_url: str, max_files: int|None=None) -> tu
                     source_kind="github-repository-source",
                     evidence_details={"repository":f"{owner}/{repo}","branch":branch,"file_path":path,"line":line_no,"source_url":source_url,"response_body_saved":False}))
     summary={"repository":f"{owner}/{repo}","repository_url":f"https://github.com/{owner}/{repo}","default_branch":branch,
-        "visibility":metadata.get("visibility","unknown"),"files_reviewed":reviewed,"files_skipped":skipped+max(0,len(candidates)-file_limit),
+        "visibility":metadata.get("visibility","unknown"),"files_reviewed":reviewed,"files_skipped":skipped,
         "bytes_reviewed":total,"elapsed_seconds":round(time.monotonic()-started,2),"tree_truncated":bool(tree.get("truncated")),"dependency_manifests":manifests,
         "access_mode":"authenticated read-only" if token else "public unauthenticated read-only",
         "limitations":["Static pattern matches are leads, not proof of exploitability.","No repository code was executed and no files were modified.","Dependency manifests are inventoried; this pass does not claim complete CVE coverage.","Private repositories require a user-supplied read-only GITHUB_TOKEN in the local environment."]}
