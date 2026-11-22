@@ -196,13 +196,11 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
         baseline_samples.append(client.get(url))
     if not baseline_samples:
         return []
-    baseline = baseline_samples[-1]
+    baseline = baseline_samples[0]
     statuses = [item.status for item in baseline_samples]
     baseline_stable = len(set(statuses)) == 1
     baseline_elapsed = sorted(item.elapsed_seconds for item in baseline_samples)[len(baseline_samples) // 2]
-    baseline_hits = set()
-    for item in baseline_samples:
-        baseline_hits.update(_diagnostic_hits(item.body))
+    baseline_hits = set(_diagnostic_hits(baseline.body))
     baseline_digest = sha256(baseline.body).hexdigest()
     baseline_bytes = len(baseline.body)
     observations: list[FuzzObservation] = []
