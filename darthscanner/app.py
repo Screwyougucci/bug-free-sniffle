@@ -345,11 +345,11 @@ class DarthScannerApp:
         tk.Spinbox(controls, from_=1, to=32, width=5, textvariable=cases_var,
                    bg="#202a3a", fg="#f7f9fc", insertbackground="white", relief="flat").pack(side="left", padx=(7, 18))
         tk.Label(controls, text="Max parameters", bg="#151d2a", fg="#aebbd0").pack(side="left")
-        params_var = tk.IntVar(value=8)
-        tk.Spinbox(controls, from_=1, to=8, width=5, textvariable=params_var,
+        params_var = tk.IntVar(value=7)
+        tk.Spinbox(controls, from_=1, to=7, width=5, textvariable=params_var,
                    bg="#202a3a", fg="#f7f9fc", insertbackground="white", relief="flat").pack(side="left", padx=7)
         tk.Label(panel, text="GET only. No form submission, uploads, credential guessing, redirect following, or exploit payloads. "
-                 "The run shares a 24-request budget and saves hashes/metadata, never response bodies or raw test values.",
+                 "The run shares a 24-request budget. Promising GET-only signals are automatically repeated once when budget allows; only hashes and metadata are saved, never response bodies or raw test values.",
                  bg="#151d2a", fg="#9eabc0", font=("Segoe UI", 8), wraplength=680,
                  justify="left").pack(anchor="w", pady=(14, 10))
 
@@ -362,8 +362,8 @@ class DarthScannerApp:
                 target, host = parse_target_url(url_var.get())
                 max_cases = int(cases_var.get())
                 max_params = int(params_var.get())
-                if not 1 <= max_cases <= 32 or not 1 <= max_params <= 8:
-                    raise ValueError("Cases must be 1–32 and parameters 1–8.")
+                if not 1 <= max_cases <= 32 or not 1 <= max_params <= 7:
+                    raise ValueError("Cases must be 1–32 and parameters 1–7 (one request is reserved for automatic verification).")
                 parameters = discover_query_parameters(url_var.get().strip(), max_params)
                 if not parameters:
                     raise ValueError("Enter a URL containing at least one query parameter.")
@@ -395,7 +395,7 @@ class DarthScannerApp:
             self._set_running(True)
             self._log(f"Starting authorized fuzz run: {sanitize_url(url_var.get().strip())}")
             self._log(f"Parameters discovered: {', '.join(parameters)}")
-            self._log("Fuzzing is GET-only, rate-limited, and capped at 24 requests.")
+            self._log("Fuzzing is GET-only, rate-limited, and capped at 24 requests. One request is reserved for automatic repeatability verification.")
             self.worker = threading.Thread(
                 target=self._run_fuzz,
                 args=(url_var.get().strip(), scope_path, output_path, max_cases, max_params),
@@ -418,9 +418,18 @@ class DarthScannerApp:
                 client = SafeHttpClient(scope, max_requests=scope.max_requests)
                 parameters = discover_query_parameters(url, max_params)
                 observations = run_fuzz_suite(
-                    url, parameters, scope, client, max_cases, stop_event=self.stop_event,
+                    url, parameters, scope, client, max_cases, stop_event=self.stop_event, auto_verify=True,
                 )
                 observation_data = observations_to_dict(observations)
+                tested_parameters = sorted({item.parameter for item in observations})
+                verification_results = [
+                    item.automatic_verification for item in observations
+                    if item.automatic_verification.get("attempted")
+                ]
+                repeated_count = sum(
+                    item.get("outcome") == "repeatable-observation"
+                    for item in verification_results
+                )
                 finding_reports = build_fuzz_finding_reports(observation_data, output_path.parent / "findings")
                 correlations = correlate_fuzz_observations(observation_data)
                 correlation_dir = output_path.parent / "correlations"
@@ -428,11 +437,18 @@ class DarthScannerApp:
                 (correlation_dir / "index.json").write_text(json.dumps({"tool": APP_NAME, "correlation_count": len(correlations), "correlations": correlations, "note": "Correlated hypotheses only; no exploit is confirmed and no CVSS is assigned."}, indent=2), encoding="utf-8")
                 payload = {
                     "tool": APP_NAME,
-                    "version": "0.20.0",
+                    "version": "0.21.0",
                     "generated_at": datetime.now(timezone.utc).isoformat(),
                     "target": sanitize_url(url),
                     "requests_made": client.requests_made,
-                    "parameters": parameters,
+                    "parameters": tested_parameters,
+                    "parameters_skipped_by_budget": [name for name in parameters if name not in tested_parameters],
+                    "automatic_verification": {
+                        "attempts": len(verification_results),
+                        "repeatable_observations": repeated_count,
+                        "exploit_confirmed": False,
+                        "note": "Automatic checks repeat selected benign GET observations once; repeatability is not proof of exploitability."
+                    },
                     "fuzz_observations": observation_data,
                     "exploitability_analysis": analyze_exploitability(observation_data),
                     "correlated_hypotheses": correlations,
@@ -447,6 +463,9 @@ class DarthScannerApp:
                 }
                 output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
                 self.events.put(("log", f"Fuzz run complete: {len(observations)} case(s), {payload['anomaly_count']} anomaly signal(s)."))
+                self.events.put(("log", f"Automatic PoC verification: {len(verification_results)} attempt(s), {repeated_count} repeatable observation(s). No exploit is auto-confirmed."))
+                if payload["parameters_skipped_by_budget"]:
+                    self.events.put(("log", "Parameters skipped to preserve the verification request budget: " + ", ".join(payload["parameters_skipped_by_budget"])))
                 self.events.put(("log", f"Exploitability triage produced {len(payload['exploitability_analysis'])} unconfirmed hypothesis/hypotheses for manual validation."))
                 self.events.put(("log", f"Created {len(finding_reports)} separate vulnerability-pattern evidence report(s)."))
                 self.events.put(("log", f"Correlated {len(correlations)} same-resource evidence hypothesis/hypotheses."))
