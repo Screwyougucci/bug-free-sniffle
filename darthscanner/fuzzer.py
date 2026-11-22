@@ -59,6 +59,7 @@ class FuzzObservation:
     capture_time_utc: str = ""
     response_headers: dict = field(default_factory=dict)
     reproduction_steps: list[str] = field(default_factory=list)
+    automatic_verification: dict = field(default_factory=dict)
 
 
 def sanitize_url(url: str) -> str:
@@ -175,7 +176,8 @@ def _diagnostic_hits(body: bytes) -> list[str]:
 
 def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
              max_cases: int = 12, baseline_repeats: int = 2,
-             stop_event=None) -> list[FuzzObservation]:
+             stop_event=None, auto_verify: bool = False,
+             reserve_requests: int = 0, verification_state: dict | None = None) -> list[FuzzObservation]:
     """Fuzz one existing GET query parameter with a repeated baseline and bounded corpus."""
     scope.validate_url(url)
     if not 1 <= max_cases <= 32:
@@ -272,6 +274,56 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
         confidence = "low"  # one response anomaly is only a lead, never high-confidence proof
         if not notes:
             notes.append("no notable difference from baseline")
+
+        # Repeat one promising, benign GET observation within the shared budget.
+        # This checks reproducibility only; it does not execute or confirm an exploit.
+        verification = {}
+        repeatable_signals = {
+            "new-server-error", "new-diagnostic-signature", "input-reflection",
+            "status-change", "redirect", "content-type-change",
+        }
+        eligible = sorted(set(signals) & repeatable_signals)
+        can_verify = (
+            auto_verify and eligible and
+            not (stop_event and stop_event.is_set()) and
+            client.max_requests - client.requests_made > max(0, reserve_requests)
+        )
+        if can_verify:
+            checked = client.get(mutated_url)
+            checked_signals = set()
+            if checked.status is not None and checked.status >= 500 and baseline.status is not None and baseline.status < 500:
+                checked_signals.add("new-server-error")
+            if checked.status != baseline.status and baseline_stable:
+                checked_signals.add("status-change")
+            if checked.status is not None and 300 <= checked.status < 400:
+                checked_signals.add("redirect")
+            if checked.headers.get("content-type", "") != baseline_type:
+                checked_signals.add("content-type-change")
+            if set(_diagnostic_hits(checked.body)) - baseline_hits:
+                checked_signals.add("new-diagnostic-signature")
+            if bool(value) and value.encode("utf-8", errors="ignore") in checked.body:
+                checked_signals.add("input-reflection")
+            reproduced = sorted(set(eligible) & checked_signals)
+            verification = {
+                "attempted": True, "method": "GET", "status": checked.status,
+                "response_sha256": sha256(checked.body).hexdigest(),
+                "response_bytes": len(checked.body),
+                "elapsed_seconds": round(checked.elapsed_seconds, 4),
+                "observed_signals": sorted(checked_signals),
+                "reproduced_signals": reproduced,
+                "outcome": "repeatable-observation" if reproduced else "not_reproduced",
+                "exploit_confirmed": False, "response_body_saved": False,
+                "raw_test_value_saved": False,
+                "note": "A repeated response supports reproducibility only; human impact validation is still required.",
+            }
+            if verification_state is not None:
+                verification_state["used"] = True
+        else:
+            verification = {
+                "attempted": False, "outcome": "skipped",
+                "reason": "No eligible signal, no reserved request capacity, or scan stopped.",
+                "exploit_confirmed": False,
+            }
         digest = sha256(response.body).hexdigest()
         safe_request = sanitize_url(mutated_url)
         steps = [
@@ -296,15 +348,21 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
             capture_time_utc=datetime.now(timezone.utc).isoformat(),
             response_headers=_safe_headers(response.headers),
             reproduction_steps=steps,
+            automatic_verification=verification,
         ))
     return observations
 
 
 def run_fuzz_suite(url: str, parameters: list[str], scope: Scope,
                    client: SafeHttpClient, max_cases: int = 12,
-                   stop_event=None) -> list[FuzzObservation]:
+                   stop_event=None, auto_verify: bool = False) -> list[FuzzObservation]:
     """Fuzz several discovered query parameters while reserving baseline budget."""
     unique = list(dict.fromkeys(parameters))
+    if auto_verify:
+        # Reserve one request for a repeatability check. A 24-request campaign
+        # can cover at most seven parameters at the minimum three requests each.
+        max_auto_params = max(1, (client.max_requests - 1) // 3)
+        unique = unique[:max_auto_params]
     if not unique:
         raise ValueError("No query parameters were found. Supply a URL containing query parameters.")
     if len(unique) > 20:
@@ -312,13 +370,21 @@ def run_fuzz_suite(url: str, parameters: list[str], scope: Scope,
     if client.max_requests - client.requests_made < len(unique) * 3:
         raise ValueError("Request budget is too small for at least one baseline and one case per parameter.")
     observations: list[FuzzObservation] = []
+    verification_state = {"used": False}
     for index, parameter in enumerate(unique):
         if stop_event and stop_event.is_set():
             break
         remaining_params = len(unique) - index - 1
-        available = client.max_requests - client.requests_made - (remaining_params * 3)
+        reserve = remaining_params * 3
+        if auto_verify and not verification_state["used"]:
+            reserve += 1
+        available = client.max_requests - client.requests_made - reserve
         cases = min(max_cases, max(1, available - 2))
-        observations.extend(run_fuzz(url, parameter, scope, client, cases, baseline_repeats=2, stop_event=stop_event))
+        observations.extend(run_fuzz(
+            url, parameter, scope, client, cases, baseline_repeats=2,
+            stop_event=stop_event, auto_verify=auto_verify,
+            reserve_requests=reserve, verification_state=verification_state,
+        ))
     return observations
 
 
