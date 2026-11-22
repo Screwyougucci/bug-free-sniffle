@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 from contextlib import redirect_stdout, redirect_stderr
+from datetime import datetime, timezone
 from pathlib import Path
 import queue
 import subprocess
@@ -20,6 +21,9 @@ from tkinter import messagebox, ttk
 from .identity import target_id, resource_id
 from .app_utils import parse_target_url
 from .watch import run_watch
+from .fuzzer import discover_query_parameters, observations_to_dict, run_fuzz_suite, sanitize_url
+from .http_client import SafeHttpClient
+from .scope import load_scope
 
 
 APP_NAME = "Darth Scanner"
@@ -135,6 +139,10 @@ class DarthScannerApp:
                                      relief="flat", padx=17, pady=8, font=("Segoe UI", 9, "bold"),
                                      state="disabled")
         self.stop_button.pack(side="left", padx=3)
+        self.fuzz_button = tk.Button(entry_row, text="FUZZ LAB", command=self.show_fuzz_lab,
+                                     bg="#34445b", fg="white", activebackground="#465c79",
+                                     relief="flat", padx=17, pady=8, font=("Segoe UI", 9, "bold"))
+        self.fuzz_button.pack(side="left", padx=3)
         self.authorized_var = tk.BooleanVar(value=False)
         self.include_subdomains_var = tk.BooleanVar(value=False)
         self.subdomain_depth_var = tk.IntVar(value=5)
@@ -241,6 +249,7 @@ class DarthScannerApp:
                               fg="#e4a0a8" if running else "#a8adb9")
         self.start_button.configure(state="disabled" if running else "normal")
         self.stop_button.configure(state="normal" if running else "disabled")
+        self.fuzz_button.configure(state="disabled" if running else "normal")
 
     def start_watch(self):
         if self.worker is not None and self.worker.is_alive():
@@ -304,6 +313,127 @@ class DarthScannerApp:
             daemon=True,
         )
         self.worker.start()
+
+    def show_fuzz_lab(self):
+        """Open the bounded HTTP parameter fuzzing workspace."""
+        if self.worker is not None and self.worker.is_alive():
+            messagebox.showinfo("Fuzz Lab", "Stop the current scan before starting a fuzzing run.")
+            return
+        window = tk.Toplevel(self.root)
+        window.title("Professional HTTP Fuzz Lab | Darth Scanner")
+        window.geometry("760x360")
+        window.configure(bg="#0b0e14")
+        panel = tk.Frame(window, bg="#151d2a", padx=20, pady=18)
+        panel.pack(fill="both", expand=True, padx=16, pady=16)
+        tk.Label(panel, text="HTTP PARAMETER FUZZING", bg="#151d2a", fg="#f3f6fb",
+                 font=("Segoe UI", 14, "bold")).pack(anchor="w")
+        tk.Label(panel, text="Adaptive benign GET mutations • repeated baseline • response-difference evidence",
+                 bg="#151d2a", fg="#9eabc0", font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 14))
+        tk.Label(panel, text="URL with query parameters", bg="#151d2a", fg="#d7d9e0",
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w")
+        url_var = tk.StringVar(value=self.url_var.get().strip())
+        url_entry = tk.Entry(panel, textvariable=url_var, bg="#202a3a", fg="#f7f9fc",
+                             insertbackground="white", relief="flat", font=("Consolas", 10))
+        url_entry.pack(fill="x", ipady=8, pady=(5, 12))
+        controls = tk.Frame(panel, bg="#151d2a")
+        controls.pack(anchor="w")
+        tk.Label(controls, text="Max cases / parameter", bg="#151d2a", fg="#aebbd0").pack(side="left")
+        cases_var = tk.IntVar(value=12)
+        tk.Spinbox(controls, from_=1, to=32, width=5, textvariable=cases_var,
+                   bg="#202a3a", fg="#f7f9fc", insertbackground="white", relief="flat").pack(side="left", padx=(7, 18))
+        tk.Label(controls, text="Max parameters", bg="#151d2a", fg="#aebbd0").pack(side="left")
+        params_var = tk.IntVar(value=8)
+        tk.Spinbox(controls, from_=1, to=8, width=5, textvariable=params_var,
+                   bg="#202a3a", fg="#f7f9fc", insertbackground="white", relief="flat").pack(side="left", padx=7)
+        tk.Label(panel, text="GET only. No form submission, uploads, credential guessing, redirect following, or exploit payloads. "
+                 "The run shares a 24-request budget and saves hashes/metadata, never response bodies or raw test values.",
+                 bg="#151d2a", fg="#9eabc0", font=("Segoe UI", 8), wraplength=680,
+                 justify="left").pack(anchor="w", pady=(14, 10))
+
+        def begin():
+            if not self.authorized_var.get():
+                messagebox.showwarning("Authorization required",
+                    "Confirm the ownership/permission checkbox in the main window first.")
+                return
+            try:
+                target, host = parse_target_url(url_var.get())
+                max_cases = int(cases_var.get())
+                max_params = int(params_var.get())
+                if not 1 <= max_cases <= 32 or not 1 <= max_params <= 8:
+                    raise ValueError("Cases must be 1–32 and parameters 1–8.")
+                parameters = discover_query_parameters(url_var.get().strip(), max_params)
+                if not parameters:
+                    raise ValueError("Enter a URL containing at least one query parameter.")
+            except (ValueError, TypeError) as exc:
+                messagebox.showerror("Invalid fuzz target", str(exc))
+                return
+            if not messagebox.askyesno(
+                "Confirm authorized fuzzing",
+                f"Run bounded GET fuzzing against {target}?\n\n"
+                f"Parameters: {', '.join(parameters)}\n"
+                f"Maximum cases per parameter: {max_cases}\n"
+                f"Maximum requests: 24 (shared across all parameters)\n\n"
+                "Confirm that you are authorized to test this exact host."
+            ):
+                return
+            folder = app_data_dir() / (target_id(target) + "-" + resource_id(target))
+            folder.mkdir(parents=True, exist_ok=True)
+            fuzz_dir = folder / "fuzz"
+            fuzz_dir.mkdir(exist_ok=True)
+            scope_path = folder / "fuzz-scope.json"
+            scope_path.write_text(json.dumps({
+                "authorized": True, "allowed_hosts": [host],
+                "max_pages": 1, "max_requests": 24,
+                "request_delay_seconds": 1.0, "timeout_seconds": 8,
+            }, indent=2), encoding="utf-8")
+            stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            output_path = fuzz_dir / f"fuzz-{stamp}.json"
+            self.stop_event.clear()
+            self._set_running(True)
+            self._log(f"Starting authorized fuzz run: {sanitize_url(url_var.get().strip())}")
+            self._log(f"Parameters discovered: {', '.join(parameters)}")
+            self._log("Fuzzing is GET-only, rate-limited, and capped at 24 requests.")
+            self.worker = threading.Thread(
+                target=self._run_fuzz,
+                args=(url_var.get().strip(), scope_path, output_path, max_cases, max_params),
+                daemon=True,
+            )
+            self.worker.start()
+            window.destroy()
+
+        tk.Button(panel, text="START FUZZING", command=begin, bg="#c0263d", fg="white",
+                  activebackground="#e03b55", relief="flat", padx=18, pady=9,
+                  font=("Segoe UI", 9, "bold")).pack(anchor="e", pady=(5, 0))
+
+    def _run_fuzz(self, url: str, scope_path: Path, output_path: Path,
+                  max_cases: int, max_params: int):
+        """Run one bounded fuzz campaign and persist sanitized evidence."""
+        writer = _QueueWriter(self.events)
+        try:
+            with redirect_stdout(writer), redirect_stderr(writer):
+                scope = load_scope(scope_path)
+                client = SafeHttpClient(scope, max_requests=scope.max_requests)
+                parameters = discover_query_parameters(url, max_params)
+                observations = run_fuzz_suite(
+                    url, parameters, scope, client, max_cases, stop_event=self.stop_event,
+                )
+                payload = {
+                    "tool": APP_NAME,
+                    "version": "0.16.0",
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
+                    "target": sanitize_url(url),
+                    "requests_made": client.requests_made,
+                    "parameters": parameters,
+                    "fuzz_observations": observations_to_dict(observations),
+                    "anomaly_count": sum(bool(item.signal_types) for item in observations),
+                    "disclaimer": "Fuzz anomalies are triage leads, not confirmed vulnerabilities. No response bodies or raw test values are stored.",
+                }
+                output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+                self.events.put(("log", f"Fuzz run complete: {len(observations)} case(s), {payload['anomaly_count']} observation(s) requiring review."))
+                self.events.put(("log", f"Fuzz evidence saved: {output_path}"))
+            self.events.put(("exit", "Fuzz run stopped." if self.stop_event.is_set() else "Fuzz run complete."))
+        except Exception as exc:
+            self.events.put(("exit", f"Fuzz error: {exc}"))
 
     def _run_process(self, target: str, scope_path: Path, output_dir: Path, cve_lookup: bool):
         """Run the scheduler in this app process and stream all output into the UI."""

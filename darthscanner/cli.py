@@ -16,7 +16,7 @@ from .cve import load_inventory, load_nvd_feed, match_cves
 from .cve_online import lookup_cves_for_components
 from .exposure import probe_sensitive_paths
 from .fingerprint import fingerprint_response
-from .fuzzer import observations_to_dict, run_fuzz
+from .fuzzer import discover_query_parameters, observations_to_dict, run_fuzz_suite, sanitize_url
 from .http_client import SafeHttpClient
 from .method_checks import inspect_http_methods
 from .report import write_report
@@ -57,10 +57,11 @@ def _parser() -> argparse.ArgumentParser:
 
     fuzz = commands.add_parser("fuzz", help="run bounded, benign GET query-parameter fuzzing")
     fuzz.add_argument("--url", required=True, help="specific GET URL containing the parameter")
-    fuzz.add_argument("--param", required=True, help="exact query parameter name to mutate")
+    fuzz.add_argument("--param", action="append", help="query parameter to mutate; repeat to select multiple (default: discover from URL)")
     fuzz.add_argument("--scope", default="scope.json")
     fuzz.add_argument("--acknowledge-authorization", action="store_true")
-    fuzz.add_argument("--max-cases", type=int, default=9, help="1-32 benign mutations")
+    fuzz.add_argument("--max-cases", type=int, default=12, help="1-32 benign mutations per parameter, shared request budget applies")
+    fuzz.add_argument("--max-params", type=int, default=8, help="maximum automatically discovered query parameters (1-16)")
     fuzz.add_argument("--output", default="darth-fuzz-report.json")
 
     cve = commands.add_parser("cve", help="match a software inventory against a local NVD 2.0 JSON feed")
@@ -335,17 +336,24 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.max_cases < 1 or args.max_cases > 32:
             raise ValueError("--max-cases must be between 1 and 32.")
+        if not 1 <= args.max_params <= 16:
+            raise ValueError("--max-params must be between 1 and 16.")
         scope.validate_url(args.url)
-        client = SafeHttpClient(scope, max_requests=min(scope.max_requests, args.max_cases + 1))
-        observations = run_fuzz(args.url, args.param, scope, client, args.max_cases)
+        parameters = args.param or discover_query_parameters(args.url, args.max_params)
+        if not parameters:
+            raise ValueError("The URL has no query parameters to fuzz. Add a query parameter or pass --param.")
+        client = SafeHttpClient(scope, max_requests=scope.max_requests)
+        observations = run_fuzz_suite(args.url, parameters, scope, client, args.max_cases)
+        report_target = sanitize_url(args.url)
         _write_bundle(
-            args, target=args.url, requests_made=client.requests_made, pages=[],
+            args, target=report_target, requests_made=client.requests_made, pages=[],
             findings=[], fuzz_observations=observations_to_dict(observations),
         )
-        anomalies = sum("no notable" not in item.note for item in observations)
-        print(f"Fuzzed {args.param!r} with {len(observations)} benign mutation(s).")
+        anomalies = sum(bool(item.signal_types) for item in observations)
+        print(f"Fuzzed {len(set(item.parameter for item in observations))} parameter(s) with {len(observations)} benign mutation(s).")
+        print(f"Requests used: {client.requests_made}/{client.max_requests}; repeated baselines: enabled.")
         print(f"Observations requiring review: {anomalies}")
-        print("These are robustness signals, not confirmed vulnerabilities.")
+        print("Anomalies are triage leads, not confirmed vulnerabilities; response bodies and raw test values are not saved.")
         print(f"JSON: {args.output}")
         return 0
     except (ScopeError, ValueError, RuntimeError, OSError) as exc:

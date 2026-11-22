@@ -1,5 +1,9 @@
 # Darth Scanner — Web & Server Security Scanner
 
+## Version 0.16.0
+
+Professional fuzzing now discovers query parameters automatically (or accepts repeated `--param` selectors), selects benign test cases based on observed input types, samples a repeated baseline, and records per-case hashes, response metadata, anomaly signals, score, confidence, and safe reproduction steps. It shares the authorization scope request budget across parameters, rate-limits requests, redacts secret-like query values in reports, and never stores response bodies or raw fuzz values. It remains read-only GET fuzzing; it does not submit forms or use exploit payloads.
+
 ## Version 0.15.0
 
 Finding details now include a sanitized, repeatable proof-of-concept record for observed HTTP conditions: capture time, read-only GET method, redacted request URL, response status, elapsed time, response size, selected security-relevant response headers, and a SHA-256 digest of the response body. The body itself, cookies, authorization headers, and common secret-bearing query values are not retained. Reproduction steps explain how to repeat the same read-only request and compare the result. These are verification steps for observed behavior, not exploit payloads or proof that a condition is exploitable. Evidence metadata is persisted in finding history and included in JSON scan reports. Windows now prefers Per-Monitor DPI Awareness V2, with legacy fallbacks, for sharper rendering across mixed-DPI monitors.
@@ -84,9 +88,12 @@ CVSS v2 has no Critical tier; scores 7.0–10.0 are High.
 
 ### 6. Fuzzing
 
-- A conservative GET query-parameter fuzzer with 32 bounded, benign mutation values and anomaly evidence.
-- One request at a time, fixed minimum delay, bounded request count, and no redirects, form submissions, credential guessing, uploads, or exploit payload execution.
-- Status changes, 5xx responses, diagnostic signatures, content-type changes, response hashes, input reflection, large response-size changes, and slow responses are recorded as triage signals, not confirmed vulnerabilities.
+- Adaptive GET query-parameter fuzzing; discovers up to 8 parameters from the supplied URL by default, or accepts repeated `--param` selectors.
+- Chooses a deterministic benign corpus based on the original input shape (numeric, boolean, UUID-like, or general text), including type, encoding, Unicode, whitespace, and bounded length boundaries.
+- Samples the baseline twice, then compares status, Content-Type, response size, response timing, diagnostic signatures, and input reflection.
+- Each case records a sanitized request URL, test-input SHA-256 (not the raw value), baseline and response hashes, response headers from a small allowlist, anomaly signals, score, confidence, timestamp, and safe reproduction steps.
+- Uses one request at a time, the configured minimum delay, and the same scope-wide request budget. It never follows redirects, submits forms, guesses credentials, uploads files, stores response bodies, or sends exploit payloads.
+- Signals are triage leads only. Reflection is not automatically XSS, a 5xx response is not automatically a vulnerability, and timing differences require repeat validation.
 
 ### 7. Zero-day research mode (local source audit)
 
@@ -104,7 +111,7 @@ The `audit-code` command performs deterministic static analysis of local Python 
 
 These are heuristic findings, not confirmed zero-days. Static analysis cannot prove whether input is attacker-controlled or whether a vulnerable path is reachable. The current source auditor supports Python only; other languages are not silently treated as audited.
 
-An unknown vulnerability can also be investigated through the bounded `fuzz` command on an explicitly authorized endpoint. It compares responses and flags behavior changes for manual review. This is black-box anomaly research, not coverage-guided binary fuzzing, and does not automatically exploit or prove a flaw.
+An unknown robustness issue can also be investigated through the bounded `fuzz` command on an explicitly authorized endpoint. It compares repeated baselines against adaptive benign mutations and records evidence for manual review. This is black-box HTTP parameter fuzzing, not coverage-guided binary fuzzing, and does not automatically exploit or prove a flaw. Example: `darth-scanner fuzz --url https://example.test/search?q=hello&page=1 --scope scope.json --acknowledge-authorization --max-cases 12` automatically tests the discovered query parameters. Use `--param q --param page` to select exact parameters.
 
 ### 8. Browser-side XSS and source review indicators\n\nThe scanner passively inspects HTML already fetched by the bounded crawler. It looks for inline event handlers, `javascript:` URLs, source-and-sink co-occurrence in inline scripts (for example, browser-controlled URL sources alongside HTML-string sinks), and same-origin source-map references. It never executes JavaScript, injects payloads, or fetches source maps. These findings are review leads: co-occurrence is not proof of data flow or exploitable XSS.\n\n### 9. Recursive subdomain discovery
 
@@ -130,7 +137,7 @@ Each scan writes a single UTF-8 `darth-report.json` file designed to open cleanl
 
 ## Desktop dashboard (Windows, Linux, macOS with Tk support)
 
-Darth Scanner 0.9.0 includes a persistent local desktop dashboard. It lets you enter a website URL, start or stop an adaptive watch, review unique findings, inspect each finding's IDs/evidence/history, and reopen the same saved target history after restarting the app. The app uses Python's built-in Tkinter; no web server or third-party GUI package is required. On Windows, launch it with `darth-scanner-app` from PowerShell after installation.
+Darth Scanner 0.9.0 includes a persistent local desktop dashboard. It lets you enter a website URL, start or stop an adaptive watch, launch the dedicated HTTP Fuzz Lab, review unique findings, inspect each finding's IDs/evidence/history, and reopen the same saved target history after restarting the app. The app uses Python's built-in Tkinter; no web server or third-party GUI package is required. On Windows, launch it with `darth-scanner-app` from PowerShell after installation.
 
 The app prompts you to confirm that you own the site or have explicit permission before starting. It creates a separate local scope for the exact hostname entered (not its subdomains), uses bounded read-only web checks, and keeps reports/history under `%LOCALAPPDATA%\\DarthScanner`. Continuous watch runs until you press **STOP** or close the app. The minimum interval is 30 seconds. Entering a URL does not itself grant permission to scan it.
 
