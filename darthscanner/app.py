@@ -16,6 +16,7 @@ import subprocess
 import sys
 import threading
 import tkinter as tk
+import webbrowser
 from urllib.parse import urlsplit
 from tkinter import messagebox, ttk
 from .identity import target_id, resource_id
@@ -162,7 +163,10 @@ class DarthScannerApp:
                                              bg="#40516b", fg="white", activebackground="#566d8e",
                                              relief="flat", padx=14, pady=7,
                                              font=("Segoe UI", 9, "bold"))
-        self.github_audit_button.pack(side="left")
+        self.github_audit_button.pack(side="left", padx=(0, 5))
+        tk.Button(github_row, text="VIEW REPORT", command=self.open_github_report,
+                  bg="#253247", fg="white", relief="flat", padx=11, pady=7,
+                  font=("Segoe UI", 9, "bold")).pack(side="left")
         self.authorized_var = tk.BooleanVar(value=False)
         self.include_subdomains_var = tk.BooleanVar(value=False)
         self.subdomain_depth_var = tk.IntVar(value=5)
@@ -319,10 +323,30 @@ class DarthScannerApp:
         folder.mkdir(parents=True, exist_ok=True)
         self.stop_event.clear()
         self._set_running(True)
+        self.stop_button.configure(state="disabled")
         self._log(f"Starting read-only GitHub source audit: {repository}")
         self.worker = threading.Thread(target=self._run_github_audit,
                                        args=(repository, folder), daemon=True)
         self.worker.start()
+
+    def open_github_report(self):
+        try:
+            target, _host = parse_target_url(self.url_var.get())
+        except ValueError as exc:
+            messagebox.showerror("Select a website", str(exc))
+            return
+        folder = app_data_dir() / (target_id(target) + "-" + resource_id(target)) / "github-source-audit"
+        report = folder / "latest-report.json"
+        if not report.exists():
+            messagebox.showinfo("No GitHub report", "Run a GitHub code audit first. Its report will be saved with this website's local scan history.")
+            return
+        try:
+            if sys.platform == "win32":
+                os.startfile(str(report))
+            else:
+                webbrowser.open(report.as_uri())
+        except OSError as exc:
+            messagebox.showerror("Could not open report", str(exc))
 
     def _run_github_audit(self, repository: str, output_dir: Path):
         try:
