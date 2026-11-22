@@ -1,5 +1,9 @@
 # Darth Scanner — Web & Server Security Scanner
 
+## Version 0.17.0
+
+Fuzz reports now include evidence-based exploitability triage. The engine groups benign fuzz signals into cautious vulnerability hypotheses (for example, input-triggered server errors, diagnostic disclosure, reflected input requiring context review, and unusual response behavior). It also carries forward candidate CVE and static-review findings with safe validation guidance. Each assessment includes its supporting hashes, observed status, confidence, estimated severity, potential impact, and non-destructive next steps. These are unconfirmed leads—not working exploits, proof of compromise, or CVSS scores unless a matched CVE supplies one. No additional exploit payloads are sent.
+
 ## Version 0.16.0
 
 Professional fuzzing now discovers query parameters automatically (or accepts repeated `--param` selectors), selects benign test cases based on observed input types, samples a repeated baseline, and records per-case hashes, response metadata, anomaly signals, score, confidence, and safe reproduction steps. It shares the authorization scope request budget across parameters, rate-limits requests, redacts secret-like query values in reports, and never stores response bodies or raw fuzz values. It remains read-only GET fuzzing; it does not submit forms or use exploit payloads.
