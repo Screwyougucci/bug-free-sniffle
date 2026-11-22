@@ -144,7 +144,7 @@ class ProfessionalFuzzerTests(unittest.TestCase):
         fake = FakeClient([response() for _ in range(24)], max_requests=24)
         names = ["q", "page", "sort", "filter", "lang", "view", "limit", "offset"]
         items = run_fuzz_suite(
-            "https://example.test/search?q=x&page=1", names, self.scope,
+            "https://example.test/search?q=x&page=1&sort=x&filter=x&lang=x&view=x&limit=x&offset=x", names, self.scope,
             fake, max_cases=1, auto_verify=True,
         )
         self.assertLessEqual(fake.requests_made, 24)
