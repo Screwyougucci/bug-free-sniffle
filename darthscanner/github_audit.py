@@ -1,6 +1,6 @@
 """Read-only GitHub repository discovery and static source review."""
 from __future__ import annotations
-import base64, json, os, re
+import base64, json, os, re, time
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
