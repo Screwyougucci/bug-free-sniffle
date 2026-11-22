@@ -1,5 +1,9 @@
 # Darth Scanner — Web & Server Security Scanner
 
+## Version 0.19.0
+
+Fuzz Lab now classifies response anomalies into separate, cautious vulnerability-pattern hypotheses and writes one standalone JSON evidence report per candidate under the target's local `fuzz/findings` folder, plus an `index.json`. Reports include sanitized GET request details, baseline/response hashes and metadata, signal type, confidence, safe reproduction and validation steps, and explicit limitations. Reflection is not labelled XSS, redirects are not labelled open redirects without destination validation, and timing/size anomalies are not treated as denial-of-service proof. Response bodies and raw test values are never stored; CVSS is not assigned to unconfirmed fuzz hypotheses.
+
 ## Version 0.18.0
 
 Fuzz Lab now uses feedback-guided scheduling. After every bounded GET case, it updates the priority of remaining benign input families based on observed response signals (for example, reflection guides encoding/context cases, diagnostic changes guide structured/type cases, and timing or response-size outliers guide bounded length cases). It also explores under-tested families when a case produces no signal. The schedule is deterministic, explainable, and stays inside the existing request/time limits; it does not generate exploit payloads or increase the request budget.
@@ -97,6 +101,7 @@ CVSS v2 has no Critical tier; scores 7.0–10.0 are High.
 ### 6. Fuzzing
 
 - Feedback-guided case scheduling: each response influences which remaining benign input family runs next; signal-to-family mappings and exploration behavior are covered by tests.
+- Vulnerability-pattern triage creates separate JSON evidence reports for diagnostic disclosure, input-triggered server errors, reflected-input context review, redirect behavior, media-type changes, unusual latency, response growth, and HTTP status changes. These are unconfirmed leads with safe validation guidance.
 - Adaptive GET query-parameter fuzzing; discovers up to 8 parameters from the supplied URL by default, or accepts repeated `--param` selectors.
 - Chooses a deterministic benign corpus based on the original input shape (numeric, boolean, UUID-like, or general text), including type, encoding, Unicode, whitespace, and bounded length boundaries.
 - Samples the baseline twice, then compares status, Content-Type, response size, response timing, diagnostic signatures, and input reflection.
