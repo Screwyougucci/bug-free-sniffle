@@ -33,6 +33,10 @@ class Finding:
     confidence_score: int | None = None
     source_excerpt: str | None = None
     source_line: int | None = None
+    source_url: str | None = None
+    source_kind: str | None = None
+    cvss_source: str | None = None
+    cvss_validation: dict = field(default_factory=dict)
     evidence_details: dict = field(default_factory=dict)
     reproduction_steps: list[str] = field(default_factory=list)
 
@@ -225,6 +229,8 @@ def _finding(category: str, title: str, severity: str, confidence: str,
     references = [f"https://cwe.mitre.org/data/definitions/{item.split('-')[1]}.html"
                   for item in cwe_ids]
     evidence_details, reproduction_steps = _http_evidence(response)
+    source_excerpt, source_line = source_excerpt_for(response, title)
+    source_kind = "HTML response source" if "html" in response.headers.get("content-type", "").lower() else ("Text response source" if source_excerpt else None)
     return Finding(
         category=category,
         title=title,
@@ -239,8 +245,10 @@ def _finding(category: str, title: str, severity: str, confidence: str,
         remediation_steps=[remediation] if remediation else [],
         cwe_ids=cwe_ids,
         references=references,
-        source_excerpt=source_excerpt_for(response, title)[0],
-        source_line=source_excerpt_for(response, title)[1],
+        source_excerpt=source_excerpt,
+        source_line=source_line,
+        source_url=response.url if source_excerpt else None,
+        source_kind=source_kind,
         evidence_details=evidence_details,
         reproduction_steps=reproduction_steps,
     )

@@ -273,6 +273,16 @@ Treat results as code-review leads. Confirm reachability, input control, authent
 
 The scanner does not automatically exploit findings. It is designed to identify candidates and produce evidence for authorized security review. Version 0.5.0 adds passive browser-side XSS indicators but does not claim to prove or exploit zero-days.
 
+## Professional evidence analysis (0.20.0)
+
+Fuzz Lab uses feedback-guided benign input families, repeated baselines, bounded GET-only requests, and response hashes. A single anomalous response is kept as a low-confidence lead; it is not promoted to a confirmed exploit. The campaign correlates observations only when they share the same host, path, and query parameter, then writes a separate `correlations/index.json` report with contributing evidence hashes and safe owner-validation steps. Correlation sends no extra requests and never claims an exploit chain is confirmed.
+
+Published CVE findings retain the NVD/CNA CVSS score, version, and vector. CVSS 3.1 vectors are independently recalculated as a consistency check; mismatches are flagged instead of silently changing the published score. CVSS 4.0 scores remain sourced from NVD/CNA. A CVSS base score describes the vulnerability, not the likelihood that a particular target is exploitable. Unconfirmed fuzz hypotheses do not receive invented CVSS scores.
+
+Finding details show the exact client-visible response URL, line number, and sanitized source excerpt when the relevant HTML/JavaScript or text is present in the fetched response. This is not the server's private source tree. To identify server-side file paths and line numbers, provide the authorized source repository or a source-code audit target.
+
+All validation remains non-destructive and scoped: no shell execution, credential attacks, auth bypass, data extraction, destructive payloads, or denial-of-service testing.
+
 ## Tests
 
 ```powershell

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "darth-scanner"
-version = "0.19.0"
-description = "Deterministic web/server scanner with vulnerability-specific fuzz evidence reports and feedback-guided fuzzing"
+version = "0.20.0"
+description = "Authorized web security scanner with correlated fuzz evidence, CVSS vector validation, and source locations"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
