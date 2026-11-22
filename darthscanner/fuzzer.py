@@ -269,7 +269,7 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
         score = min(100, score)
         # A single mutation is never enough for high confidence. Independent
         # corroboration across observations is required before analyst review.
-        confidence = "medium" if score >= 30 and baseline_stable else "low"
+        confidence = "low"  # one response anomaly is only a lead, never high-confidence proof
         if not notes:
             notes.append("no notable difference from baseline")
         digest = sha256(response.body).hexdigest()
