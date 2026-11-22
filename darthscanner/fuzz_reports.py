@@ -186,6 +186,26 @@ def build_fuzz_finding_reports(observations: list[dict], output_dir: str | Path)
                 "requires_human_confirmation": True,
                 "target": target,
                 "evidence": evidence,
+                "proof_of_concept": {
+                    "title": "Non-destructive, repeatable HTTP proof",
+                    "request_method": "GET",
+                    "request_url": target,
+                    "parameter": str(item.get("parameter") or ""),
+                    "case_name": str(item.get("case") or ""),
+                    "input_sha256_only": str(item.get("input_sha256") or ""),
+                    "initial_observation": {
+                        "status": item.get("status"),
+                        "response_sha256": str(item.get("response_sha256") or ""),
+                        "response_bytes": int(item.get("response_bytes") or 0),
+                        "baseline_status": item.get("baseline_status"),
+                        "baseline_sha256": str(item.get("baseline_sha256") or ""),
+                    },
+                    "automatic_verification": dict(item.get("automatic_verification") or {
+                        "attempted": False, "outcome": "not-run",
+                        "note": "Automatic repeatability verification was not run for this observation."
+                    }),
+                    "interpretation": "A repeated signal demonstrates repeatability of an HTTP observation only. It does not prove exploitability, impact, or authorization to access data.",
+                },
                 "safe_reproduction_steps": list(item.get("reproduction_steps") or []) + spec["validation"],
                 "limitations": [
                     "A response anomaly is not proof of exploitability.",
