@@ -283,10 +283,14 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
             "status-change", "redirect", "content-type-change",
         }
         eligible = sorted(set(signals) & repeatable_signals)
+        verification_unused = verification_state is None or not verification_state.get("used")
+        future_reserve = max(
+            0, reserve_requests - (1 if verification_state is not None and verification_unused else 0)
+        )
         can_verify = (
-            auto_verify and eligible and baseline_stable and
+            auto_verify and eligible and baseline_stable and verification_unused and
             not (stop_event and stop_event.is_set()) and
-            client.max_requests - client.requests_made > max(0, reserve_requests)
+            client.max_requests - client.requests_made > future_reserve
         )
         if can_verify:
             checked = client.get(mutated_url)
