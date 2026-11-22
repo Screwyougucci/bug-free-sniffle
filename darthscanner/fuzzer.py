@@ -74,7 +74,7 @@ def discover_query_parameters(url: str, max_params: int = 8) -> list[str]:
         raise ValueError("max_params must be between 1 and 20.")
     names = []
     for key, _ in parse_qsl(urlsplit(url).query, keep_blank_values=True):
-        if key and key not in names:
+        if key and key not in names and not any(part in key.lower() for part in _SECRET_PARTS):
             names.append(key)
         if len(names) >= max_params:
             break
@@ -184,6 +184,8 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
     matching = [value for key, value in pairs if key == parameter]
     if len(matching) != 1:
         raise ValueError(f"Expected exactly one query parameter named {parameter!r} in the URL.")
+    if any(part in parameter.lower() for part in _SECRET_PARTS):
+        raise ValueError("Secret-like query parameters are excluded from fuzzing.")
     original = matching[0]
     if client.max_requests - client.requests_made < baseline_repeats + 1:
         raise ValueError("Request budget must allow a baseline and at least one mutation.")
