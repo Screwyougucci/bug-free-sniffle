@@ -74,6 +74,8 @@ def _request(url: str, token: str|None, limit: int) -> bytes:
 def _safe_excerpt(line: str) -> str:
     value=SECRET_LINE.sub(r"\1\2[REDACTED]\3",line.strip())
     value=re.sub(r"(?i)(Bearer\s+)[A-Za-z0-9._~+/=-]{12,}",r"\1[REDACTED]",value)
+    value=re.sub(r"\bAKIA[0-9A-Z]{16}\b","[REDACTED_AWS_KEY]",value)
+    value=re.sub(r"\bgh[pousr]_[A-Za-z0-9_]{30,}\b","[REDACTED_GITHUB_TOKEN]",value)
     return value[:360]
 
 def audit_github_repository(repository_url: str, max_files: int|None=None) -> tuple[list[Finding],dict]:
