@@ -443,7 +443,7 @@ class DarthScannerApp:
                 self.events.put(("log", f"Fuzz run complete: {len(observations)} case(s), {payload['anomaly_count']} anomaly signal(s)."))
                 self.events.put(("log", f"Exploitability triage produced {len(payload['exploitability_analysis'])} unconfirmed hypothesis/hypotheses for manual validation."))
                 self.events.put(("log", f"Created {len(finding_reports)} separate vulnerability-pattern evidence report(s)."))
-                self.events.put(("log", f"Individual evidence reports saved in: {output_path.parent / \"findings\"}"))
+                self.events.put(("log", "Individual evidence reports saved in: " + str(output_path.parent / "findings")))
                 self.events.put(("log", f"Fuzz evidence saved: {output_path}"))
             self.events.put(("exit", "Fuzz run stopped." if self.stop_event.is_set() else "Fuzz run complete."))
         except Exception as exc:
