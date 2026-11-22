@@ -25,6 +25,7 @@ from .fuzzer import discover_query_parameters, observations_to_dict, run_fuzz_su
 from .http_client import SafeHttpClient
 from .scope import load_scope
 from .exploitability import analyze_exploitability
+from .fuzz_reports import build_fuzz_finding_reports
 
 
 APP_NAME = "Darth Scanner"
@@ -418,21 +419,31 @@ class DarthScannerApp:
                 observations = run_fuzz_suite(
                     url, parameters, scope, client, max_cases, stop_event=self.stop_event,
                 )
+                observation_data = observations_to_dict(observations)
+                finding_reports = build_fuzz_finding_reports(observation_data, output_path.parent / "findings")
                 payload = {
                     "tool": APP_NAME,
-                    "version": "0.17.0",
+                    "version": "0.19.0",
                     "generated_at": datetime.now(timezone.utc).isoformat(),
                     "target": sanitize_url(url),
                     "requests_made": client.requests_made,
                     "parameters": parameters,
-                    "fuzz_observations": observations_to_dict(observations),
-                    "exploitability_analysis": analyze_exploitability(observations_to_dict(observations)),
+                    "fuzz_observations": observation_data,
+                    "exploitability_analysis": analyze_exploitability(observation_data),
+                    "finding_reports": [
+                        {"report_id": item["report_id"], "category": item["category"],
+                         "title": item["title"], "severity_estimate": item["severity_estimate"],
+                         "confidence": item["confidence"], "file": "findings/" + item["report_id"] + ".json"}
+                        for item in finding_reports
+                    ],
                     "anomaly_count": sum(bool(item.signal_types) for item in observations),
-                    "disclaimer": "Fuzz anomalies are triage leads, not confirmed vulnerabilities. No response bodies or raw test values are stored.",
+                    "disclaimer": "Fuzz anomalies and finding reports are unconfirmed triage leads. No response bodies or raw test values are stored.",
                 }
                 output_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
                 self.events.put(("log", f"Fuzz run complete: {len(observations)} case(s), {payload['anomaly_count']} anomaly signal(s)."))
                 self.events.put(("log", f"Exploitability triage produced {len(payload['exploitability_analysis'])} unconfirmed hypothesis/hypotheses for manual validation."))
+                self.events.put(("log", f"Created {len(finding_reports)} separate vulnerability-pattern evidence report(s)."))
+                self.events.put(("log", f"Individual evidence reports saved in: {output_path.parent / \"findings\"}"))
                 self.events.put(("log", f"Fuzz evidence saved: {output_path}"))
             self.events.put(("exit", "Fuzz run stopped." if self.stop_event.is_set() else "Fuzz run complete."))
         except Exception as exc:
