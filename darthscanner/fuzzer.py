@@ -54,6 +54,8 @@ class FuzzObservation:
     signal_types: list[str] = field(default_factory=list)
     anomaly_score: int = 0
     confidence: str = "low"
+    baseline_repeats: int = 0
+    baseline_stable: bool = False
     capture_time_utc: str = ""
     response_headers: dict = field(default_factory=dict)
     reproduction_steps: list[str] = field(default_factory=list)
@@ -265,7 +267,9 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
             notes.append("request did not produce an HTTP response")
             score += 5
         score = min(100, score)
-        confidence = "high" if score >= 65 and baseline_stable else ("medium" if score >= 30 else "low")
+        # A single mutation is never enough for high confidence. Independent
+        # corroboration across observations is required before analyst review.
+        confidence = "medium" if score >= 30 and baseline_stable else "low"
         if not notes:
             notes.append("no notable difference from baseline")
         digest = sha256(response.body).hexdigest()
@@ -288,6 +292,7 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
             baseline_sha256=baseline_digest, size_delta_bytes=size_delta,
             timing_ratio=timing_ratio, signal_types=signals,
             anomaly_score=score, confidence=confidence,
+            baseline_repeats=len(baseline_samples), baseline_stable=baseline_stable,
             capture_time_utc=datetime.now(timezone.utc).isoformat(),
             response_headers=_safe_headers(response.headers),
             reproduction_steps=steps,
