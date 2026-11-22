@@ -151,6 +151,19 @@ class ProfessionalFuzzerTests(unittest.TestCase):
         self.assertLessEqual(len({item.parameter for item in items}), 7)
         self.assertNotIn("offset", {item.parameter for item in items})
 
+    def test_auto_verification_skips_unstable_baseline(self):
+        fake = FakeClient([
+            response(200), response(404),
+            response(500, b"Internal Server Error: traceback (most recent call last)", 0.2),
+        ], max_requests=4)
+        items = run_fuzz(
+            "https://example.test/search?q=hello", "q", self.scope, fake,
+            max_cases=1, baseline_repeats=2, auto_verify=True,
+            reserve_requests=0,
+        )
+        self.assertFalse(items[0].automatic_verification["attempted"])
+        self.assertEqual(fake.requests_made, 3)
+
 
 if __name__ == "__main__":
     unittest.main()
