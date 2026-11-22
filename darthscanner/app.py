@@ -627,20 +627,23 @@ class DarthScannerApp:
         try:
             with redirect_stdout(writer), redirect_stderr(writer):
                 if github_repo:
-                    self.events.put(("log", f"Starting linked GitHub source review: {github_repo}"))
-                    github_findings, github_summary = audit_github_repository(github_repo)
-                    github_dir = output_dir.parent / "github-source-audit"
-                    github_dir.mkdir(parents=True, exist_ok=True)
-                    github_report = {
-                        "tool": APP_NAME, "version": "0.22.0",
-                        "generated_at": datetime.now(timezone.utc).isoformat(),
-                        "repository": github_summary, "finding_count": len(github_findings),
-                        "findings": [item.to_dict() for item in github_findings],
-                        "disclaimer": "Static source matches are unconfirmed review leads. No code was executed and no repository content was modified."
-                    }
-                    github_path = github_dir / "latest-report.json"
-                    github_path.write_text(json.dumps(github_report, indent=2, ensure_ascii=False), encoding="utf-8")
-                    self.events.put(("log", f"GitHub audit complete: {github_summary['files_reviewed']} files, {len(github_findings)} finding(s). Report: {github_path}"))
+                    try:
+                        self.events.put(("log", f"Starting linked GitHub source review: {github_repo}"))
+                        github_findings, github_summary = audit_github_repository(github_repo)
+                        github_dir = output_dir.parent / "github-source-audit"
+                        github_dir.mkdir(parents=True, exist_ok=True)
+                        github_report = {
+                            "tool": APP_NAME, "version": "0.22.0",
+                            "generated_at": datetime.now(timezone.utc).isoformat(),
+                            "repository": github_summary, "finding_count": len(github_findings),
+                            "findings": [item.to_dict() for item in github_findings],
+                            "disclaimer": "Static source matches are unconfirmed review leads. No code was executed and no repository content was modified."
+                        }
+                        github_path = github_dir / "latest-report.json"
+                        github_path.write_text(json.dumps(github_report, indent=2, ensure_ascii=False), encoding="utf-8")
+                        self.events.put(("log", f"GitHub audit complete: {github_summary['files_reviewed']} files, {len(github_findings)} finding(s). Report: {github_path}"))
+                    except Exception as exc:
+                        self.events.put(("log", f"GitHub source review could not complete; website scan will continue: {exc}"))
                 code = run_watch(
                     target=target,
                     scope_path=str(scope_path),
