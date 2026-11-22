@@ -79,7 +79,7 @@ def _safe_excerpt(line: str) -> str:
     value=re.sub(r"\bgh[pousr]_[A-Za-z0-9_]{30,}\b","[REDACTED_GITHUB_TOKEN]",value)
     return value[:360]
 
-def audit_github_repository(repository_url: str, max_files: int|None=None) -> tuple[list[Finding],dict]:
+def audit_github_repository(repository_url: str, max_files: int|None=None, stop_event=None) -> tuple[list[Finding],dict]:
     owner,repo=parse_repository_url(repository_url)
     token=os.environ.get("GITHUB_TOKEN","").strip() or None
     ceiling=AUTH_FILE_LIMIT if token else PUBLIC_FILE_LIMIT
@@ -99,9 +99,13 @@ def audit_github_repository(repository_url: str, max_files: int|None=None) -> tu
         suffix="."+name.rsplit(".",1)[-1] if "." in name else ""
         if suffix in SOURCE_SUFFIXES or name in MANIFEST_NAMES or name=="dockerfile": candidates.append(entry)
     candidates.sort(key=lambda x:(0 if str(x.get("path","")).split("/")[-1].lower() in MANIFEST_NAMES else 1,str(x.get("path",""))))
-    findings=[]; reviewed=skipped=total=0; manifests=[]
+    findings=[]; reviewed=skipped=total=0; manifests=[]; stopped=False
     started=time.monotonic()
     for entry in candidates:
+        if stop_event is not None and stop_event.is_set():
+            stopped=True
+            skipped += len(candidates) - reviewed - skipped
+            break
         if time.monotonic()-started >= MAX_SCAN_SECONDS:
             skipped += len(candidates) - reviewed - skipped
             break
@@ -136,7 +140,7 @@ def audit_github_repository(repository_url: str, max_files: int|None=None) -> tu
                     evidence_details={"repository":f"{owner}/{repo}","branch":branch,"file_path":path,"line":line_no,"source_url":source_url,"response_body_saved":False}))
     summary={"repository":f"{owner}/{repo}","repository_url":f"https://github.com/{owner}/{repo}","default_branch":branch,
         "visibility":metadata.get("visibility","unknown"),"files_reviewed":reviewed,"files_skipped":skipped,
-        "bytes_reviewed":total,"elapsed_seconds":round(time.monotonic()-started,2),"tree_truncated":bool(tree.get("truncated")),"dependency_manifests":manifests,
+        "bytes_reviewed":total,"elapsed_seconds":round(time.monotonic()-started,2),"stopped":stopped,"tree_truncated":bool(tree.get("truncated")),"dependency_manifests":manifests,
         "access_mode":"authenticated read-only" if token else "public unauthenticated read-only",
         "limitations":["Static pattern matches are leads, not proof of exploitability.","No repository code was executed and no files were modified.","Dependency manifests are inventoried; this pass does not claim complete CVE coverage.","Private repositories require a user-supplied read-only GITHUB_TOKEN in the local environment."]}
     return findings,summary
