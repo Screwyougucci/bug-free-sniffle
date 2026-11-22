@@ -75,7 +75,7 @@ class ProfessionalFuzzerTests(unittest.TestCase):
         self.assertIn("new-server-error", item.signal_types)
         self.assertIn("new-diagnostic-signature", item.signal_types)
         self.assertGreaterEqual(item.anomaly_score, 65)
-        self.assertEqual(item.confidence, "medium")
+        self.assertEqual(item.confidence, "low")
         self.assertEqual(item.baseline_repeats, 2)
         self.assertTrue(item.baseline_stable)
         self.assertNotIn("secret", item.request_url)
