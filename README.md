@@ -1,5 +1,9 @@
 # Darth Scanner — Web & Server Security Scanner
 
+## Version 0.18.0
+
+Fuzz Lab now uses feedback-guided scheduling. After every bounded GET case, it updates the priority of remaining benign input families based on observed response signals (for example, reflection guides encoding/context cases, diagnostic changes guide structured/type cases, and timing or response-size outliers guide bounded length cases). It also explores under-tested families when a case produces no signal. The schedule is deterministic, explainable, and stays inside the existing request/time limits; it does not generate exploit payloads or increase the request budget.
+
 ## Version 0.17.0
 
 Fuzz reports now include evidence-based exploitability triage. The engine groups benign fuzz signals into cautious vulnerability hypotheses (for example, input-triggered server errors, diagnostic disclosure, reflected input requiring context review, and unusual response behavior). It also carries forward candidate CVE and static-review findings with safe validation guidance. Each assessment includes its supporting hashes, observed status, confidence, estimated severity, potential impact, and non-destructive next steps. These are unconfirmed leads—not working exploits, proof of compromise, or CVSS scores unless a matched CVE supplies one. No additional exploit payloads are sent.
@@ -92,6 +96,7 @@ CVSS v2 has no Critical tier; scores 7.0–10.0 are High.
 
 ### 6. Fuzzing
 
+- Feedback-guided case scheduling: each response influences which remaining benign input family runs next; signal-to-family mappings and exploration behavior are covered by tests.
 - Adaptive GET query-parameter fuzzing; discovers up to 8 parameters from the supplied URL by default, or accepts repeated `--param` selectors.
 - Chooses a deterministic benign corpus based on the original input shape (numeric, boolean, UUID-like, or general text), including type, encoding, Unicode, whitespace, and bounded length boundaries.
 - Samples the baseline twice, then compares status, Content-Type, response size, response timing, diagnostic signatures, and input reflection.
