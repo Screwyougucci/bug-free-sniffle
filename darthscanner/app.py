@@ -435,7 +435,7 @@ class DarthScannerApp:
         if github_repo:
             if not messagebox.askyesno(
                 "Confirm GitHub repository authorization",
-                f"Also perform a read-only source review of:\\n\\n{github_repo}\\n\\n"
+                f"Also perform a read-only source review of:\n\n{github_repo}\n\n"
                 "Confirm you own this repository or have explicit permission to inspect it. No code will be executed or modified."
             ):
                 github_repo = None
