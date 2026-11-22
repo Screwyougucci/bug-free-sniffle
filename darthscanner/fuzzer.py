@@ -153,7 +153,7 @@ def _diagnostic_hits(body: bytes) -> list[str]:
 
 
 def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
-             max_cases: int = 12, baseline_repeats: int = 2) -> list[FuzzObservation]:
+             max_cases: int = 12, baseline_repeats: int = 2,\n             stop_event=None) -> list[FuzzObservation]:
     """Fuzz one existing GET query parameter with a repeated baseline and bounded corpus."""
     scope.validate_url(url)
     if not 1 <= max_cases <= 32:
@@ -267,7 +267,7 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
 
 
 def run_fuzz_suite(url: str, parameters: list[str], scope: Scope,
-                   client: SafeHttpClient, max_cases: int = 12) -> list[FuzzObservation]:
+                   client: SafeHttpClient, max_cases: int = 12,\n                   stop_event=None) -> list[FuzzObservation]:
     """Fuzz several discovered query parameters while reserving baseline budget."""
     unique = list(dict.fromkeys(parameters))
     if not unique:
@@ -281,7 +281,7 @@ def run_fuzz_suite(url: str, parameters: list[str], scope: Scope,
         remaining_params = len(unique) - index - 1
         available = client.max_requests - client.requests_made - (remaining_params * 3)
         cases = min(max_cases, max(1, available - 2))
-        observations.extend(run_fuzz(url, parameter, scope, client, cases, baseline_repeats=2))
+        observations.extend(run_fuzz(url, parameter, scope, client, cases, baseline_repeats=2, stop_event=stop_event))
     return observations
 
 
