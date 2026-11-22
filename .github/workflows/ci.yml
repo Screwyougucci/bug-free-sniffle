@@ -26,3 +26,4 @@ jobs:
         run: |
           darth-scanner --help
           darth-scanner audit-code --help
+          darth-scanner audit-github --help
