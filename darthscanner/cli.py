@@ -22,6 +22,7 @@ from .method_checks import inspect_http_methods
 from .report import write_report
 from .scope import ScopeError, load_scope, require_authorization
 from .source_audit import audit_python_source
+from .github_audit import audit_github_repository
 from .tls_checks import inspect_tls
 from .watch import run_watch
 from .subdomains import discover_subdomain_tree
@@ -76,6 +77,11 @@ def _parser() -> argparse.ArgumentParser:
     audit.add_argument("--path", required=True, help="local Python file or source directory")
     audit.add_argument("--max-files", type=int, default=1000, help="maximum Python files to inspect (1-10000)")
     audit.add_argument("--output", default="darth-source-report.json")
+
+    github_audit = commands.add_parser("audit-github", help="statically inspect an authorized GitHub repository without executing its code")
+    github_audit.add_argument("--repo", required=True, help="GitHub repository URL (owner/repository)")
+    github_audit.add_argument("--max-files", type=int, help="maximum source files (40 public, 180 with GITHUB_TOKEN)")
+    github_audit.add_argument("--output", default="darth-github-source-report.json")
     return parser
 
 
@@ -132,6 +138,17 @@ def main(argv: list[str] | None = None) -> int:
             )
             print(f"Python source files reviewed: {reviewed}; skipped: {skipped}.")
             print("These are static-review leads, not proof of a zero-day or exploitability.")
+            _print_finding_summary(findings)
+            print(f"JSON: {args.output}")
+            return 0
+
+        if args.command == "audit-github":
+            findings, summary = audit_github_repository(args.repo, max_files=args.max_files)
+            _write_bundle(args, target=summary["repository_url"], requests_made=0, pages=[], findings=findings,
+                          source_files_reviewed=summary["files_reviewed"], source_files_skipped=summary["files_skipped"])
+            print(f"GitHub repository: {summary['repository']} ({summary['access_mode']}).")
+            print(f"Source files reviewed: {summary['files_reviewed']}; skipped: {summary['files_skipped']}; bytes: {summary['bytes_reviewed']}.")
+            print("Repository code was not executed or modified. Static matches are unconfirmed review leads.")
             _print_finding_summary(findings)
             print(f"JSON: {args.output}")
             return 0
