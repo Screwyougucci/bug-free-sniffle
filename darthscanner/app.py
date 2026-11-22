@@ -26,6 +26,7 @@ from .http_client import SafeHttpClient
 from .scope import load_scope
 from .exploitability import analyze_exploitability
 from .fuzz_reports import build_fuzz_finding_reports
+from .fuzz_correlation import correlate_fuzz_observations
 
 
 APP_NAME = "Darth Scanner"
@@ -421,15 +422,20 @@ class DarthScannerApp:
                 )
                 observation_data = observations_to_dict(observations)
                 finding_reports = build_fuzz_finding_reports(observation_data, output_path.parent / "findings")
+                correlations = correlate_fuzz_observations(observation_data)
+                correlation_dir = output_path.parent / "correlations"
+                correlation_dir.mkdir(parents=True, exist_ok=True)
+                (correlation_dir / "index.json").write_text(json.dumps({"tool": APP_NAME, "correlation_count": len(correlations), "correlations": correlations, "note": "Correlated hypotheses only; no exploit is confirmed and no CVSS is assigned."}, indent=2), encoding="utf-8")
                 payload = {
                     "tool": APP_NAME,
-                    "version": "0.19.0",
+                    "version": "0.20.0",
                     "generated_at": datetime.now(timezone.utc).isoformat(),
                     "target": sanitize_url(url),
                     "requests_made": client.requests_made,
                     "parameters": parameters,
                     "fuzz_observations": observation_data,
                     "exploitability_analysis": analyze_exploitability(observation_data),
+                    "correlated_hypotheses": correlations,
                     "finding_reports": [
                         {"report_id": item["report_id"], "category": item["category"],
                          "title": item["title"], "severity_estimate": item["severity_estimate"],
@@ -443,6 +449,8 @@ class DarthScannerApp:
                 self.events.put(("log", f"Fuzz run complete: {len(observations)} case(s), {payload['anomaly_count']} anomaly signal(s)."))
                 self.events.put(("log", f"Exploitability triage produced {len(payload['exploitability_analysis'])} unconfirmed hypothesis/hypotheses for manual validation."))
                 self.events.put(("log", f"Created {len(finding_reports)} separate vulnerability-pattern evidence report(s)."))
+                self.events.put(("log", f"Correlated {len(correlations)} same-resource evidence hypothesis/hypotheses."))
+                self.events.put(("log", "Correlation index saved in: " + str(correlation_dir / "index.json")))
                 self.events.put(("log", "Individual evidence reports saved in: " + str(output_path.parent / "findings")))
                 self.events.put(("log", f"Fuzz evidence saved: {output_path}"))
             self.events.put(("exit", "Fuzz run stopped." if self.stop_event.is_set() else "Fuzz run complete."))
@@ -707,17 +715,19 @@ class DarthScannerApp:
         cvss_text = f"CVSS {item.get('cvss_version') or ''} {cvss}/10".strip() if cvss is not None else "Not scored"
         section("CVSS severity score", cvss_text, "#f4c66b")
         section("CVSS vector", item.get("cvss_vector") or "Not supplied by the NVD record.", "#f4c66b")
+        section("CVSS source and vector validation", json.dumps(item.get("cvss_validation") or {"source": item.get("cvss_source") or "Not supplied", "note": "CVSS is vulnerability severity, not target-specific exploitability."}, indent=2), "#f4c66b")
         section("Affected software component", item.get("affected_component"))
         section("CVE references", "\n".join(item.get("references") or []), "#8fc5ff")
         section("What the scanner detected", item.get("description"))
         section("Why this may matter", item.get("impact") or
                 "This is an automated observation, not proof of exploitability. Review the evidence and affected component in context before treating it as a vulnerability.",
                 "#f4c66b")
-        section("Exact source code / response snippet",
-                (f"Line {item.get('source_line')}:\n" if item.get("source_line") else "")
-                + (item.get("source_excerpt") or
-                   "No source-code snippet applies to this finding. The evidence is based on response headers or metadata."),
-                "#70d6b0")
+        source_location = [str(item.get("source_kind") or "Client-visible response source"), str(item.get("source_url") or item.get("url") or "URL unavailable")]
+        if item.get("source_line"):
+            source_location.append("Line " + str(item.get("source_line")))
+        source_location.append(item.get("source_excerpt") or "No source excerpt applies; this finding is based on response metadata.")
+        source_location.append("This is source exposed in the HTTP response, not the server-side application source file. Server-side file paths and line numbers require owner-provided source code or repository access.")
+        section("Exact source location / code evidence", "\\n".join(source_location), "#70d6b0")
         section("Evidence collected", item.get("evidence"), "#70d6b0")
         section("Safe proof of concept / reproduction steps",
                 "\n".join(item.get("reproduction_steps") or []) or
