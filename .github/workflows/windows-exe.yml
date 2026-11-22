@@ -11,7 +11,7 @@ on:
       - "v0.14.0-cvss-dpi-ui"
       - "v0.15.0-evidence-poc-dpi"
       - "v0.16.0-professional-fuzzing"
-      - "v0.18.0-exploitability-analysis"
+      - "v0.17.0-exploitability-analysis"
       - "v0.18.0-feedback-guided-fuzzing"
     tags:
       - "v*"
