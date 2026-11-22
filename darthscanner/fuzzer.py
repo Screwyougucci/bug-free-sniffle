@@ -112,8 +112,7 @@ def _variants(original: str) -> list[tuple[str, str, str]]:
         ("medium-boundary", "A" * 128, "length-boundary"),
         ("bounded-long", "A" * 256, "length-boundary"),
         ("leading-trailing-space", " value ", "whitespace"),
-        ("tab-and-newline", "value\tline1
-line2", "whitespace"),
+        ("tab-and-newline", "value" + chr(9) + "line1" + chr(10) + "line2", "whitespace"),
         ("unicode", "café-東京-🙂", "unicode"),
         ("combining-unicode", "e\u0301", "unicode"),
         ("reserved-delimiters", "a&b=c?d#e", "encoding"),
