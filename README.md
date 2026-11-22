@@ -1,5 +1,11 @@
 # Darth Scanner — Web & Server Security Scanner
 
+## Version 0.22.0
+
+Darth Scanner now has a GitHub source-review workflow. In the desktop app, paste a repository URL into **GITHUB REPOSITORY** for a manual review, or leave it blank and choose **GITHUB CODE AUDIT** to discover repository links from the website landing page. The app displays the discovered candidates and selects the first one; you must separately confirm that you are authorized to inspect that repository before source files are fetched. The last JSON report is saved beside that website's local scan history and can be opened with **VIEW REPORT**.
+
+The new audit-github CLI command performs bounded, read-only static review of source files in public GitHub repositories. It checks for credential patterns, dynamic execution, unsafe deserialization, shell invocation, risky SQL construction, disabled TLS verification, DOM injection sinks, permissive CORS, and path traversal patterns. Findings include repository URL, file path, exact line number, redacted excerpt, CWE, confidence estimate, and remediation. Dependency manifests are inventoried, but this first pass does not claim complete dependency CVE matching. No repository code is executed and no files are modified. Public unauthenticated scans review up to 40 files; a locally configured read-only GITHUB_TOKEN allows up to 180 files and private-repository access. Set the token in the Windows user environment; never paste it into the scanner UI or a report. Only review repositories you own or are explicitly authorized to inspect.
+
 ## Version 0.21.0
 
 Fuzz Lab now automatically repeats one promising benign GET observation when the shared request budget allows. The repeat check records its HTTP status, response size, elapsed time, SHA-256 digest, and which original signal(s) reappeared. Each per-finding report includes a structured, sanitized proof-of-concept record with the original observation and automatic verification result. A repeatable observation is not an automatically confirmed exploit; owner-side impact validation remains required. Only one repeat request is reserved per campaign, the total remains capped at 24 requests, and the UI limits the campaign to seven parameters so the verification budget is preserved. Response bodies and raw fuzz values are never written to disk.
