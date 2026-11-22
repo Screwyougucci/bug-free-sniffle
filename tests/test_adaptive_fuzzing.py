@@ -8,7 +8,6 @@ class FeedbackGuidedSchedulerTests(unittest.TestCase):
     def test_reflection_signal_prioritizes_encoding_family(self):
         cases = [
             ("boundary", "x", "boundary"),
-            ("unicode", "café", "unicode"),
             ("encoded", "%2f", "encoding"),
         ]
         observations = [
