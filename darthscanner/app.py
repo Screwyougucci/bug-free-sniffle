@@ -343,7 +343,7 @@ class DarthScannerApp:
                    bg="#202a3a", fg="#f7f9fc", insertbackground="white", relief="flat").pack(side="left", padx=(7, 18))
         tk.Label(controls, text="Max parameters", bg="#151d2a", fg="#aebbd0").pack(side="left")
         params_var = tk.IntVar(value=8)
-        tk.Spinbox(controls, from_=1, to=20, width=5, textvariable=params_var,
+        tk.Spinbox(controls, from_=1, to=8, width=5, textvariable=params_var,
                    bg="#202a3a", fg="#f7f9fc", insertbackground="white", relief="flat").pack(side="left", padx=7)
         tk.Label(panel, text="GET only. No form submission, uploads, credential guessing, redirect following, or exploit payloads. "
                  "The run shares a 24-request budget and saves hashes/metadata, never response bodies or raw test values.",
@@ -359,8 +359,8 @@ class DarthScannerApp:
                 target, host = parse_target_url(url_var.get())
                 max_cases = int(cases_var.get())
                 max_params = int(params_var.get())
-                if not 1 <= max_cases <= 32 or not 1 <= max_params <= 20:
-                    raise ValueError("Cases must be 1–32 and parameters 1–20.")
+                if not 1 <= max_cases <= 32 or not 1 <= max_params <= 8:
+                    raise ValueError("Cases must be 1–32 and parameters 1–8.")
                 parameters = discover_query_parameters(url_var.get().strip(), max_params)
                 if not parameters:
                     raise ValueError("Enter a URL containing at least one query parameter.")
