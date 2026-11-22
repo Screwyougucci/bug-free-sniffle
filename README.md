@@ -1,6 +1,12 @@
 # Darth Scanner — Web & Server Security Scanner
 
-## Version 0.19.0
+## Version 0.21.0
+
+Fuzz Lab now automatically repeats one promising benign GET observation when the shared request budget allows. The repeat check records its HTTP status, response size, elapsed time, SHA-256 digest, and which original signal(s) reappeared. Each per-finding report includes a structured, sanitized proof-of-concept record with the original observation and automatic verification result. A repeatable observation is not an automatically confirmed exploit; owner-side impact validation remains required. Only one repeat request is reserved per campaign, the total remains capped at 24 requests, and the UI limits the campaign to seven parameters so the verification budget is preserved. Response bodies and raw fuzz values are never written to disk.
+
+## Version 0.20.0
+
+
 
 Fuzz Lab now classifies response anomalies into separate, cautious vulnerability-pattern hypotheses and writes one standalone JSON evidence report per candidate under the target's local `fuzz/findings` folder, plus an `index.json`. Reports include sanitized GET request details, baseline/response hashes and metadata, signal type, confidence, safe reproduction and validation steps, and explicit limitations. Reflection is not labelled XSS, redirects are not labelled open redirects without destination validation, and timing/size anomalies are not treated as denial-of-service proof. Response bodies and raw test values are never stored; CVSS is not assigned to unconfirmed fuzz hypotheses.
 
