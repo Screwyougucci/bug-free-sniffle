@@ -112,7 +112,8 @@ def _variants(original: str) -> list[tuple[str, str, str]]:
         ("medium-boundary", "A" * 128, "length-boundary"),
         ("bounded-long", "A" * 256, "length-boundary"),
         ("leading-trailing-space", " value ", "whitespace"),
-        ("tab-and-newline", "value\tline1\nline2", "whitespace"),
+        ("tab-and-newline", "value\tline1
+line2", "whitespace"),
         ("unicode", "café-東京-🙂", "unicode"),
         ("combining-unicode", "e\u0301", "unicode"),
         ("reserved-delimiters", "a&b=c?d#e", "encoding"),
@@ -153,7 +154,8 @@ def _diagnostic_hits(body: bytes) -> list[str]:
 
 
 def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
-             max_cases: int = 12, baseline_repeats: int = 2,\n             stop_event=None) -> list[FuzzObservation]:
+             max_cases: int = 12, baseline_repeats: int = 2,
+             stop_event=None) -> list[FuzzObservation]:
     """Fuzz one existing GET query parameter with a repeated baseline and bounded corpus."""
     scope.validate_url(url)
     if not 1 <= max_cases <= 32:
@@ -170,7 +172,13 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
         raise ValueError("Request budget must allow a baseline and at least one mutation.")
     max_cases = min(max_cases, client.max_requests - client.requests_made - baseline_repeats)
 
-    baseline_samples = [client.get(url) for _ in range(baseline_repeats)]
+    baseline_samples = []
+    for _ in range(baseline_repeats):
+        if stop_event and stop_event.is_set():
+            break
+        baseline_samples.append(client.get(url))
+    if not baseline_samples:
+        return []
     baseline = baseline_samples[-1]
     statuses = [item.status for item in baseline_samples]
     baseline_stable = len(set(statuses)) == 1
@@ -183,7 +191,7 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
     observations: list[FuzzObservation] = []
 
     for case, value, family in _variants(original)[:max_cases]:
-        if client.requests_made >= client.max_requests:
+        if (stop_event and stop_event.is_set()) or client.requests_made >= client.max_requests:
             break
         mutated_url = mutate_query_parameter(url, parameter, value)
         response = client.get(mutated_url)
@@ -267,7 +275,8 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
 
 
 def run_fuzz_suite(url: str, parameters: list[str], scope: Scope,
-                   client: SafeHttpClient, max_cases: int = 12,\n                   stop_event=None) -> list[FuzzObservation]:
+                   client: SafeHttpClient, max_cases: int = 12,
+                   stop_event=None) -> list[FuzzObservation]:
     """Fuzz several discovered query parameters while reserving baseline budget."""
     unique = list(dict.fromkeys(parameters))
     if not unique:
@@ -278,6 +287,8 @@ def run_fuzz_suite(url: str, parameters: list[str], scope: Scope,
         raise ValueError("Request budget is too small for at least one baseline and one case per parameter.")
     observations: list[FuzzObservation] = []
     for index, parameter in enumerate(unique):
+        if stop_event and stop_event.is_set():
+            break
         remaining_params = len(unique) - index - 1
         available = client.max_requests - client.requests_made - (remaining_params * 3)
         cases = min(max_cases, max(1, available - 2))
