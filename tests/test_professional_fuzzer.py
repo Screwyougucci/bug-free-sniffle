@@ -106,6 +106,40 @@ class ProfessionalFuzzerTests(unittest.TestCase):
         self.assertIn("unstable-baseline", items[0].signal_types)
         self.assertNotEqual(items[0].confidence, "high")
 
+    def test_auto_verification_repeats_a_promising_get_observation(self):
+        fake = FakeClient([
+            response(), response(),
+            response(500, b"Internal Server Error: traceback (most recent call last)", 0.2),
+            response(500, b"Internal Server Error: traceback (most recent call last)", 0.2),
+        ], max_requests=4)
+        state = {"used": False}
+        items = run_fuzz(
+            "https://example.test/search?q=hello", "q", self.scope, fake,
+            max_cases=1, baseline_repeats=2, auto_verify=True,
+            reserve_requests=0, verification_state=state,
+        )
+        check = items[0].automatic_verification
+        self.assertTrue(check["attempted"])
+        self.assertEqual(check["outcome"], "repeatable-observation")
+        self.assertIn("new-server-error", check["reproduced_signals"])
+        self.assertFalse(check["exploit_confirmed"])
+        self.assertFalse(check["response_body_saved"])
+        self.assertTrue(state["used"])
+        self.assertEqual(fake.requests_made, 4)
+
+    def test_auto_verification_respects_reserved_request_budget(self):
+        fake = FakeClient([
+            response(), response(),
+            response(500, b"Internal Server Error: traceback (most recent call last)", 0.2),
+        ], max_requests=4)
+        items = run_fuzz(
+            "https://example.test/search?q=hello", "q", self.scope, fake,
+            max_cases=1, baseline_repeats=2, auto_verify=True,
+            reserve_requests=1,
+        )
+        self.assertFalse(items[0].automatic_verification["attempted"])
+        self.assertEqual(fake.requests_made, 3)
+
 
 if __name__ == "__main__":
     unittest.main()
