@@ -91,8 +91,26 @@ def mutate_query_parameter(url: str, parameter: str, value: str) -> str:
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(updated), ""))
 
 
-def _variants(original: str) -> list[tuple[str, str, str]]:
-    """Select a deterministic, benign corpus based on the observed input type."""
+def _variants(original: str | None = None):
+    """Return the legacy 32-case corpus or an adaptive corpus for a typed input."""
+    if original is None:
+        return [
+            ("empty", ""), ("zero", "0"), ("positive-one", "1"), ("negative-one", "-1"),
+            ("int32-maximum", "2147483647"), ("int32-minimum", "-2147483648"),
+            ("int64-maximum", "9223372036854775807"), ("decimal", "1.5"),
+            ("scientific-notation", "1e6"), ("boolean-true", "true"),
+            ("boolean-false", "false"), ("null-like", "null"),
+            ("short-boundary", "A" * 32), ("medium-boundary", "A" * 128),
+            ("bounded-long", "A" * 256), ("whitespace", " value with spaces "),
+            ("tabs", "\\tvalue\\t"), ("newline", "line1\\nline2"),
+            ("unicode", "café-東京-🙂"), ("combining-unicode", "e\\u0301"),
+            ("reserved-characters", "a&b=c?d#e"), ("percent-literal", "100%25"),
+            ("json-object-shape", '{"k":"v"}'), ("json-array-shape", "[]"),
+            ("quoted-text", '"sample text"'), ("single-quoted-text", "'sample text'"),
+            ("semicolon", "alpha;beta"), ("colon", "alpha:beta"),
+            ("path-separators", "alpha/beta"), ("dot-segments", "./segment/../item"),
+            ("encoded-space", "%20sample%20"), ("long-unicode", "界" * 32),
+        ]
     numeric = bool(re.fullmatch(r"[+-]?\d+(?:\.\d+)?", original.strip()))
     boolean = original.strip().lower() in {"true", "false", "yes", "no", "0", "1"}
     uuid_like = bool(re.fullmatch(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}", original.strip()))
@@ -202,7 +220,7 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
             notes.append("baseline status varied; interpret response differences cautiously")
         if response.status is not None and response.status >= 500 and baseline.status is not None and baseline.status < 500:
             signals.append("new-server-error")
-            notes.append(f"server returned {response.status} after a non-5xx baseline")
+            notes.append(f"server returned a 5xx response ({response.status}) after a non-5xx baseline")
             score += 45
         elif response.status != baseline.status and baseline_stable:
             signals.append("status-change")
