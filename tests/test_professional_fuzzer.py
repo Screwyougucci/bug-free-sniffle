@@ -164,6 +164,19 @@ class ProfessionalFuzzerTests(unittest.TestCase):
         self.assertFalse(items[0].automatic_verification["attempted"])
         self.assertEqual(fake.requests_made, 3)
 
+    def test_campaign_uses_only_one_automatic_verification_request(self):
+        error = response(500, b"Internal Server Error: traceback (most recent call last)", 0.2)
+        fake = FakeClient([response(), response(), error, error, error], max_requests=5)
+        state = {"used": False}
+        items = run_fuzz(
+            "https://example.test/search?q=hello", "q", self.scope, fake,
+            max_cases=2, baseline_repeats=2, auto_verify=True,
+            reserve_requests=0, verification_state=state,
+        )
+        self.assertTrue(items[0].automatic_verification["attempted"])
+        self.assertFalse(items[1].automatic_verification["attempted"])
+        self.assertEqual(fake.requests_made, 5)
+
 
 if __name__ == "__main__":
     unittest.main()
