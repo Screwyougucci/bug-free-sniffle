@@ -28,6 +28,11 @@ class FuzzFindingReportTests(unittest.TestCase):
             "confidence": "medium",
             "capture_time_utc": "2026-11-21T00:00:00+00:00",
             "reproduction_steps": ["Repeat the same bounded GET request."],
+            "automatic_verification": {
+                "attempted": True, "outcome": "repeatable-observation",
+                "reproduced_signals": ["new-server-error"], "exploit_confirmed": False,
+                "response_body_saved": False, "raw_test_value_saved": False,
+            },
         }
 
     def test_multiple_patterns_get_separate_reports(self):
@@ -47,6 +52,8 @@ class FuzzFindingReportTests(unittest.TestCase):
                 self.assertFalse(saved["evidence"]["response_body_saved"])
                 self.assertFalse(saved["evidence"]["raw_test_value_saved"])
                 self.assertNotIn("raw_value", saved["evidence"])
+                self.assertEqual(saved["proof_of_concept"]["request_method"], "GET")
+                self.assertFalse(saved["proof_of_concept"]["automatic_verification"]["exploit_confirmed"])
 
     def test_redirect_is_not_mislabeled_open_redirect(self):
         with tempfile.TemporaryDirectory() as folder:
