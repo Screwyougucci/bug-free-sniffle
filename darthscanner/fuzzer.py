@@ -12,6 +12,7 @@ from hashlib import sha256
 import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from .adaptive import choose_next_case
 from .http_client import SafeHttpClient
 from .scope import Scope
 
@@ -207,9 +208,12 @@ def run_fuzz(url: str, parameter: str, scope: Scope, client: SafeHttpClient,
     baseline_bytes = len(baseline.body)
     observations: list[FuzzObservation] = []
 
-    for case, value, family in _variants(original)[:max_cases]:
+    pending_cases = list(_variants(original)[:max_cases])
+    while pending_cases:
         if (stop_event and stop_event.is_set()) or client.requests_made >= client.max_requests:
             break
+        selected = choose_next_case(pending_cases, observations)
+        case, value, family = pending_cases.pop(selected)
         mutated_url = mutate_query_parameter(url, parameter, value)
         response = client.get(mutated_url)
         signals: list[str] = []
