@@ -9,6 +9,7 @@ from pathlib import Path
 
 from . import __version__
 from .identity import finding_identity, report_identity
+from .exploitability import analyze_exploitability
 
 
 _SEVERITY_ORDER = {"critical": 0, "high": 1, "medium": 2, "low": 3, "info": 4, "none": 5}
@@ -52,6 +53,7 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
         for page in pages
     )
     cve_findings = [item for item in normalized if item.category == "cve"]
+    exploitability = analyze_exploitability(fuzz_observations, normalized)
     return {
         "tool": "Darth Scanner",
         "version": __version__,
@@ -71,7 +73,8 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
             "category_counts": dict(category_counts),
             "kind_counts": dict(kind_counts),
             "cve_matches": len(cve_findings),
-            "fuzz_anomalies": sum("no notable" not in item.get("note", "") for item in (fuzz_observations or [])),
+            "fuzz_anomalies": sum(bool(item.get("signal_types")) for item in (fuzz_observations or [])),
+            "exploitability_hypotheses": len(exploitability),
         },
         "software_components": software_components or [],
         "cve_lookup": cve_lookup_status or {"source": "NVD CVE API 2.0", "status": "not run"},
@@ -80,11 +83,12 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
         "findings": [{**item.to_dict(), **finding_identity(item.to_dict())} for item in normalized],
         "identity": report_identity(target, pages),
         "fuzz_observations": fuzz_observations or [],
+        "exploitability_analysis": exploitability,
         "disclaimer": (
             "CVE matches are candidates based on available CPE/version data and must be "
             "validated against vendor advisories, platform conditions, and backported fixes. "
             "HEAD exposure checks confirm only response metadata, not file contents. "
-            "Fuzz anomalies are triage signals, not proof of exploitability."
+            "Fuzz anomalies and exploitability assessments are triage hypotheses, not proof of exploitability. No exploit payloads are executed."
         ),
     }
 
