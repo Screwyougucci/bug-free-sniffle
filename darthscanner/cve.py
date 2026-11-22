@@ -13,6 +13,7 @@ from typing import Any
 
 from .checks import Finding
 from .fingerprint import SoftwareComponent
+from .cvss_quality import validate_cvss_metric
 
 
 @dataclass(frozen=True)
@@ -231,6 +232,8 @@ def match_cves(components: list[SoftwareComponent], feed: list[dict[str, Any]]) 
                 cvss_score=score,
                 cvss_version=cvss_version,
                 cvss_vector=vector,
+                cvss_source="NVD/CNA published metric" if score is not None else None,
+                cvss_validation=validate_cvss_metric(score, cvss_version, vector),
                 cve_ids=[cve_id],
                 references=[f"https://nvd.nist.gov/vuln/detail/{cve_id}", *references],
                 affected_component=f"{component.name} {component.version}",
