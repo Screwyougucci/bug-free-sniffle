@@ -140,6 +140,17 @@ class ProfessionalFuzzerTests(unittest.TestCase):
         self.assertFalse(items[0].automatic_verification["attempted"])
         self.assertEqual(fake.requests_made, 3)
 
+    def test_auto_verify_suite_reserves_request_and_caps_parameter_count(self):
+        fake = FakeClient([response() for _ in range(24)], max_requests=24)
+        names = ["q", "page", "sort", "filter", "lang", "view", "limit", "offset"]
+        items = run_fuzz_suite(
+            "https://example.test/search?q=x&page=1", names, self.scope,
+            fake, max_cases=1, auto_verify=True,
+        )
+        self.assertLessEqual(fake.requests_made, 24)
+        self.assertLessEqual(len({item.parameter for item in items}), 7)
+        self.assertNotIn("offset", {item.parameter for item in items})
+
 
 if __name__ == "__main__":
     unittest.main()
