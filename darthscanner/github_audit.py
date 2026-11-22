@@ -10,6 +10,7 @@ API = "https://api.github.com"
 MAX_TREE_BYTES = 12_000_000
 MAX_FILE_BYTES = 512_000
 MAX_TOTAL_BYTES = 10_000_000
+MAX_SCAN_SECONDS = 180
 PUBLIC_FILE_LIMIT = 40
 AUTH_FILE_LIMIT = 180
 SKIP_PARTS = {".git", ".github", ".venv", "venv", "node_modules", "vendor", "dist", "build", "coverage", "__pycache__", "target", "Pods"}
@@ -94,11 +95,16 @@ def audit_github_repository(repository_url: str, max_files: int|None=None) -> tu
         path=str(entry.get("path") or ""); parts=path.split("/")
         if {p.lower() for p in parts}&SKIP_PARTS: continue
         name=parts[-1].lower() if parts else ""
+        if name.endswith((".min.js", ".min.css")): continue
         suffix="."+name.rsplit(".",1)[-1] if "." in name else ""
         if suffix in SOURCE_SUFFIXES or name in MANIFEST_NAMES or name=="dockerfile": candidates.append(entry)
     candidates.sort(key=lambda x:(0 if str(x.get("path","")).split("/")[-1].lower() in MANIFEST_NAMES else 1,str(x.get("path",""))))
     findings=[]; reviewed=skipped=total=0; manifests=[]
+    started=time.monotonic()
     for entry in candidates:
+        if time.monotonic()-started >= MAX_SCAN_SECONDS:
+            skipped += len(candidates) - reviewed - skipped
+            break
         if reviewed>=file_limit: skipped+=1; continue
         size=int(entry.get("size") or 0)
         if size>MAX_FILE_BYTES or total+size>MAX_TOTAL_BYTES: skipped+=1; continue
@@ -130,7 +136,7 @@ def audit_github_repository(repository_url: str, max_files: int|None=None) -> tu
                     evidence_details={"repository":f"{owner}/{repo}","branch":branch,"file_path":path,"line":line_no,"source_url":source_url,"response_body_saved":False}))
     summary={"repository":f"{owner}/{repo}","repository_url":f"https://github.com/{owner}/{repo}","default_branch":branch,
         "visibility":metadata.get("visibility","unknown"),"files_reviewed":reviewed,"files_skipped":skipped+max(0,len(candidates)-file_limit),
-        "bytes_reviewed":total,"tree_truncated":bool(tree.get("truncated")),"dependency_manifests":manifests,
+        "bytes_reviewed":total,"elapsed_seconds":round(time.monotonic()-started,2),"tree_truncated":bool(tree.get("truncated")),"dependency_manifests":manifests,
         "access_mode":"authenticated read-only" if token else "public unauthenticated read-only",
         "limitations":["Static pattern matches are leads, not proof of exploitability.","No repository code was executed and no files were modified.","Dependency manifests are inventoried; this pass does not claim complete CVE coverage.","Private repositories require a user-supplied read-only GITHUB_TOKEN in the local environment."]}
     return findings,summary
