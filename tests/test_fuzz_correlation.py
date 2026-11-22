@@ -57,6 +57,3 @@ class FuzzCorrelationTests(unittest.TestCase):
         self.assertEqual(results[0]["confidence"], "medium")
         self.assertIn("not prove resource exhaustion", results[0]["rationale"])
 
-
-if __python:
-    pass
