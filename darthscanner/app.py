@@ -727,7 +727,7 @@ class DarthScannerApp:
             source_location.append("Line " + str(item.get("source_line")))
         source_location.append(item.get("source_excerpt") or "No source excerpt applies; this finding is based on response metadata.")
         source_location.append("This is source exposed in the HTTP response, not the server-side application source file. Server-side file paths and line numbers require owner-provided source code or repository access.")
-        section("Exact source location / code evidence", "\\n".join(source_location), "#70d6b0")
+        section("Exact source location / code evidence", "\n".join(source_location), "#70d6b0")
         section("Evidence collected", item.get("evidence"), "#70d6b0")
         section("Safe proof of concept / reproduction steps",
                 "\n".join(item.get("reproduction_steps") or []) or
