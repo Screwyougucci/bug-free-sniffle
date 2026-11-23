@@ -237,6 +237,12 @@ def main(argv: list[str] | None = None) -> int:
                 # URL extraction is passive parsing only and helps the adaptive
                 # scheduler decide whether a JavaScript review is applicable.
                 script_urls.extend(extract_same_origin_script_urls(response))
+                content_type = response.headers.get("content-type", "").lower()
+                if focus in {"all", "javascript"} and (
+                    "javascript" in content_type
+                    or urlsplit(response.url).path.lower().endswith((".js", ".mjs"))
+                ):
+                    findings.extend(inspect_javascript_source(response.url, response.text))
                 if focus in {"all", "fingerprint"}:
                     for component in fingerprint_response(response):
                         components_by_cpe[component.cpe] = component
@@ -246,10 +252,12 @@ def main(argv: list[str] | None = None) -> int:
             reserve = 20 if profile == "full" and focus == "all" else 0
             script_budget = max(0, min(12, client.max_requests - client.requests_made - reserve)) if focus in {"all", "javascript"} and profile in {"full", "web"} else 0
             script_responses = []
-            seen_scripts = set()
+            seen_scripts = {item.url for item in responses}
             for script_url in script_urls:
-                if len(script_responses) >= script_budget or script_url in seen_scripts:
+                if len(script_responses) >= script_budget:
                     break
+                if script_url in seen_scripts:
+                    continue
                 seen_scripts.add(script_url)
                 try:
                     scope.validate_url(script_url)
