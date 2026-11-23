@@ -1,8 +1,9 @@
-"""Deep, bounded same-origin route and asset discovery.
+"""Deep, bounded same-origin website discovery.
 
-The crawler follows ordinary navigational links and same-origin script assets,
-then extracts route-like literals from downloaded JavaScript. It never executes
-JavaScript, submits forms, follows redirects, or visits state-changing URL paths.
+Discovery sources: HTML navigation and assets, robots.txt and XML sitemaps,
+plus static route literals from fetched same-origin JavaScript. This HTTP
+crawler does not execute scripts, submit forms, follow redirects, or invoke
+non-GET methods. All requests share the explicit Scope and HTTP budget.
 """
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ from collections import deque
 from html.parser import HTMLParser
 import re
 from urllib.parse import urldefrag, urljoin, urlsplit, urlunsplit
+import xml.etree.ElementTree as ET
 
 from .http_client import HttpResponse, SafeHttpClient
 from .scope import Scope
@@ -27,8 +29,6 @@ _ROUTE_PATTERNS = (
 
 
 class _ReferenceParser(HTMLParser):
-    """Extract navigational links and same-origin script resources, not images."""
-
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.links: list[str] = []
@@ -42,6 +42,8 @@ class _ReferenceParser(HTMLParser):
             self.base_href = values["href"]
         elif tag in {"a", "area"} and values.get("href"):
             self.links.append(values["href"])
+        elif tag == "iframe" and values.get("src"):
+            self.links.append(values["src"])
         elif tag == "script" and values.get("src"):
             self.scripts.append(values["src"])
         elif tag == "link" and values.get("href"):
@@ -73,15 +75,43 @@ def _is_state_changing_path(url: str) -> bool:
     return bool(segments & _SKIP_PATH_PARTS)
 
 
+def _robots_sitemaps(body: str) -> list[str]:
+    found: list[str] = []
+    for line in body[:200_000].splitlines():
+        key, separator, value = line.partition(":")
+        if separator and key.strip().lower() == "sitemap" and value.strip():
+            found.append(value.strip())
+    return found[:100]
+
+
+def _sitemap_entries(body: str) -> list[tuple[str, str]]:
+    try:
+        root = ET.fromstring(body[:1_000_000])
+    except (ET.ParseError, ValueError):
+        return []
+    root_name = root.tag.rsplit("}", 1)[-1].lower()
+    child_kind = "sitemap" if root_name == "sitemapindex" else "page"
+    found: list[tuple[str, str]] = []
+    for element in root.iter():
+        if element.tag.rsplit("}", 1)[-1].lower() == "loc" and element.text:
+            value = element.text.strip()
+            if value:
+                found.append((value, child_kind))
+                if len(found) >= 1000:
+                    break
+    return found
+
+
 def _javascript_routes(source: str) -> list[str]:
     found: list[str] = []
     seen: set[str] = set()
     for pattern in _ROUTE_PATTERNS:
         for match in pattern.finditer(source[:1_000_000]):
             route = match.group(1)
-            if route not in seen:
-                seen.add(route)
-                found.append(route)
+            if "$" + "{" in route or "{{" in route or route in seen:
+                continue
+            seen.add(route)
+            found.append(route)
     return found
 
 
@@ -91,7 +121,7 @@ def crawl(
     client: SafeHttpClient,
     max_pages: int | None = None,
 ) -> list[HttpResponse]:
-    """Crawl HTML routes and same-origin JS assets within explicit shared budgets."""
+    """Crawl one authorized origin using HTML, robots/sitemap, and JS discovery."""
     scope.validate_url(start_url)
     start_url = _normalize_candidate(start_url, start_url)
     if not start_url:
@@ -99,8 +129,10 @@ def crawl(
 
     origin = _origin(start_url)
     page_limit = min(scope.max_pages, max_pages) if max_pages is not None else scope.max_pages
-    queue = deque([(start_url, "page")])
-    queued = {start_url}
+    parts = urlsplit(start_url)
+    robots_url = urlunsplit((parts.scheme, parts.netloc, "/robots.txt", "", ""))
+    queue = deque([(start_url, "page"), (robots_url, "robots")])
+    queued = {start_url, robots_url}
     seen: set[str] = set()
     responses: list[HttpResponse] = []
 
@@ -120,13 +152,29 @@ def crawl(
         responses.append(response)
 
         if response.status is None or response.status >= 400:
+            if kind == "robots":
+                fallback = _normalize_candidate(start_url, "/sitemap.xml")
+                if fallback and fallback not in seen and fallback not in queued:
+                    queued.add(fallback)
+                    queue.append((fallback, "sitemap"))
             continue
+
         content_type = response.headers.get("content-type", "").lower()
         path = urlsplit(url).path.lower()
-
         references: list[tuple[str, str]] = []
         base = url
-        if "text/html" in content_type or (kind == "page" and not content_type and path.endswith((".html", ".htm", "/"))):
+
+        if kind == "robots":
+            sitemap_urls = _robots_sitemaps(response.text)
+            if sitemap_urls:
+                references.extend((item, "sitemap") for item in sitemap_urls)
+            else:
+                fallback = _normalize_candidate(start_url, "/sitemap.xml")
+                if fallback:
+                    references.append((fallback, "sitemap"))
+        elif kind == "sitemap" or "xml" in content_type or path.endswith(".xml"):
+            references.extend(_sitemap_entries(response.text))
+        elif "text/html" in content_type or (kind == "page" and not content_type and path.endswith((".html", ".htm", "/"))):
             parser = _ReferenceParser()
             try:
                 parser.feed(response.text[:1_000_000])
