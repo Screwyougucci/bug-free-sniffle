@@ -371,7 +371,7 @@ class DarthScannerApp:
             findings, summary = audit_github_repository(repository, stop_event=self.stop_event)
             payload = {
                 "tool": APP_NAME,
-                "version": "0.22.0",
+                "version": "0.23.0",
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "repository": summary,
                 "finding_count": len(findings),
@@ -765,7 +765,7 @@ class DarthScannerApp:
                         github_dir = output_dir.parent / "github-source-audit"
                         github_dir.mkdir(parents=True, exist_ok=True)
                         github_report = {
-                            "tool": APP_NAME, "version": "0.22.0",
+                            "tool": APP_NAME, "version": "0.23.0",
                             "generated_at": datetime.now(timezone.utc).isoformat(),
                             "repository": github_summary, "finding_count": len(github_findings),
                             "findings": [item.to_dict() for item in github_findings],
