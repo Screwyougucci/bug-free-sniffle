@@ -19,9 +19,9 @@ import tkinter as tk
 import webbrowser
 from urllib.parse import urlsplit
 from tkinter import messagebox, ttk
-from .identity import target_id, resource_id
+from .identity import target_id, resource_id, update_full_scan_history
 from .app_utils import parse_target_url
-from .watch import run_watch
+from .watch import run_watch, _load_history, _save_history
 from .fuzzer import discover_query_parameters, observations_to_dict, run_fuzz_suite, sanitize_url
 from .http_client import SafeHttpClient
 from .scope import load_scope, Scope
@@ -589,6 +589,24 @@ class DarthScannerApp:
                 if not cve_lookup:
                     command.append("--no-cve-lookup")
                 code = cli_main(command, stop_event=self.stop_event)
+                if code == 0 and report_path.exists():
+                    payload = json.loads(report_path.read_text(encoding="utf-8"))
+                    history_path = output_dir / "history.json"
+                    history = _load_history(history_path)
+                    lifecycle = update_full_scan_history(
+                        history,
+                        target,
+                        payload.get("findings", []),
+                        str(report_path),
+                    )
+                    _save_history(history_path, history)
+                    self.events.put((
+                        "log",
+                        "Dashboard history updated from full scan: "
+                        f"{len(payload.get('findings', []))} findings; "
+                        f"{len(lifecycle['new'])} new, {len(lifecycle['changed'])} changed, "
+                        f"{len(lifecycle['recurring'])} recurring."
+                    ))
                 self.events.put(("log", f"Deep scan report: {report_path}"))
                 self.events.put(("exit", f"Deep scan finished (status {code})."))
         except Exception as exc:
