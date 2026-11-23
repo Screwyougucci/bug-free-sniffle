@@ -104,7 +104,7 @@ def crawl(
     seen: set[str] = set()
     responses: list[HttpResponse] = []
 
-    while queue and len(responses) < page_limit and client.requests_made < client.max_requests:
+    while queue and len(responses) < page_limit and client.requests_made < client.max_requests and not client.cancelled:
         url, kind = queue.popleft()
         queued.discard(url)
         if url in seen:
