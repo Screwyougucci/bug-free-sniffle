@@ -197,3 +197,38 @@ def update_finding_registry(
         "recurring": recurring,
         "resolved": resolved,
     }
+
+def update_full_scan_history(
+    history: dict,
+    target: str,
+    findings: list[dict],
+    report_path: str,
+    *,
+    now: str | None = None,
+) -> dict:
+    """Persist a completed full-scan result into the same dashboard registry as watch."""
+    timestamp = now or datetime.now(timezone.utc).isoformat()
+    lifecycle = update_finding_registry(history, findings, complete_round=True, now=timestamp)
+    seen = set(str(item) for item in history.get("seen_finding_ids") or [])
+    categories = set(str(item) for item in history.get("finding_categories") or [])
+    for finding in findings:
+        finding_id = finding.get("finding_id")
+        if finding_id:
+            seen.add(str(finding_id))
+        category = finding.get("category")
+        if category:
+            categories.add(str(category))
+    history.update({
+        "target": target,
+        "cycles_completed": int(history.get("cycles_completed", 0)) + 1,
+        "last_focus": "all",
+        "last_report": report_path,
+        "seen_finding_ids": sorted(seen),
+        "finding_categories": sorted(categories),
+        "eligible_focuses": [],
+        "completed_focuses": [],
+        "updated_at": timestamp,
+        "last_full_scan": timestamp,
+    })
+    return lifecycle
+
