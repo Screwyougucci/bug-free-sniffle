@@ -44,6 +44,10 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
     severity_counts = Counter(item.severity for item in normalized)
     category_counts = Counter(item.category for item in normalized)
     kind_counts = Counter(item.kind for item in normalized)
+    hardening_count = sum(item.kind == "hardening-observation" for item in normalized)
+    observation_count = sum(item.kind == "observation" for item in normalized)
+    candidate_count = sum(item.kind not in {"hardening-observation", "observation"} for item in normalized)
+    confirmed_count = sum(item.kind == "verified-vulnerability" for item in normalized)
     page_statuses = Counter(
         "error" if page.get("status") is None else
         "2xx" if 200 <= page["status"] < 300 else
@@ -69,6 +73,10 @@ def build_report(*, target: str, requests_made: int, pages: list[dict],
             "source_files_reviewed": source_files_reviewed,
             "source_files_skipped": source_files_skipped,
             "findings_total": len(normalized),
+            "actionable_candidates": candidate_count,
+            "hardening_observations": hardening_count,
+            "other_observations": observation_count,
+            "confirmed_vulnerabilities": confirmed_count,
             "severity_counts": dict(severity_counts),
             "category_counts": dict(category_counts),
             "kind_counts": dict(kind_counts),
