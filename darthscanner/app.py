@@ -587,7 +587,7 @@ class DarthScannerApp:
                 ]
                 if not cve_lookup:
                     command.append("--no-cve-lookup")
-                code = cli_main(command)
+                code = cli_main(command, stop_event=self.stop_event)
                 self.events.put(("log", f"Deep scan report: {report_path}"))
                 self.events.put(("exit", f"Deep scan finished (status {code})."))
         except Exception as exc:
