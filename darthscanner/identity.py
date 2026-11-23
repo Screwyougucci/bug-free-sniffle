@@ -116,6 +116,7 @@ def update_finding_registry(
                 "signature": signature,
                 "title": str(finding.get("title", "Untitled")),
                 "severity": str(finding.get("severity", "info")),
+                "kind": str(finding.get("kind", "finding")),
                 "category": str(finding.get("category", "unknown")),
                 "url": url,
                 "description": str(finding.get("description", "")),
@@ -154,6 +155,7 @@ def update_finding_registry(
             entry.update({
                 "title": str(finding.get("title", entry.get("title", "Untitled"))),
                 "severity": str(finding.get("severity", entry.get("severity", "info"))),
+                "kind": str(finding.get("kind", entry.get("kind", "finding"))),
                 "category": str(finding.get("category", entry.get("category", "unknown"))),
                 "url": url,
                 "description": str(finding.get("description", entry.get("description", ""))),
