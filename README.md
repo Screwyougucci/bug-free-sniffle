@@ -1,10 +1,12 @@
 # Darth Scanner — Web & Server Security Scanner
 
-## Version 0.23.0
+## Version 0.24.0
 
-The desktop app now has a dedicated **DEEP SCAN** action. Unlike START WATCH (which deliberately performs one adaptive focus per cycle), DEEP SCAN runs one full web analysis pass with up to 150 pages and 350 requests, follows same-origin HTML links and JavaScript-discovered routes, fetches same-origin JavaScript assets for static review, and shares the same scope and request budget across discovery. It can take several minutes. It never executes JavaScript, submits forms, follows redirects, or requests common state-changing paths such as logout, delete, checkout, or unsubscribe. The Stop button cancels further requests.
+The desktop app's **DEEP CRAWL** action now performs a full, bounded discovery pass followed by the full security-analysis profile. It can review up to 150 URL resources and 350 HTTP requests per run, with the configured 0.5-second delay. It discovers URLs from nested HTML links, iframe sources, robots.txt Sitemap directives, XML sitemap indexes and URL sets, same-origin JavaScript assets, and static API/route strings in those scripts. Query routes are kept distinct; fragments and duplicate URLs are removed. The crawler remains same-origin and obeys the explicit authorized scope and shared request budget. Common state-changing paths such as logout, delete, checkout, and unsubscribe are skipped.
 
-The crawler discovers nested routes from links and route-like strings in fetched JavaScript, respects base href, preserves distinct query routes, deduplicates URLs, and skips common state-changing endpoints.
+The full-scan findings are now imported into the same persistent finding registry used by the desktop dashboard, so results from DEEP CRAWL appear in the findings table and detail inspector instead of only being written to a separate JSON file. The Stop button cancels subsequent requests.
+
+This is an HTTP crawler, not a headless browser: it does not execute client-side JavaScript, click controls, submit forms, follow redirects, or send non-GET requests. JavaScript route discovery is static analysis of downloaded source. Missing/weak security headers remain hardening advice, not vulnerability findings. Suspicious behavior is not called a confirmed exploit without appropriate validation.
 
 Missing or weak security headers and similar configuration advice are classified as hardening observations, shown separately from candidate vulnerabilities, excluded from actionable-candidate totals, and never assigned CVSS. Candidate findings still require validation; a static pattern or response anomaly is not automatically an exploit.
 

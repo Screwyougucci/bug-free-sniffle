@@ -19,9 +19,9 @@ import tkinter as tk
 import webbrowser
 from urllib.parse import urlsplit
 from tkinter import messagebox, ttk
-from .identity import target_id, resource_id
+from .identity import target_id, resource_id, update_full_scan_history
 from .app_utils import parse_target_url
-from .watch import run_watch
+from .watch import run_watch, _load_history, _save_history
 from .fuzzer import discover_query_parameters, observations_to_dict, run_fuzz_suite, sanitize_url
 from .http_client import SafeHttpClient
 from .scope import load_scope, Scope
@@ -135,7 +135,7 @@ class DarthScannerApp:
         self.url_entry.pack(side="left", fill="x", expand=True, ipady=9, padx=(0, 9))
         self.url_entry.bind("<Return>", self._on_target_change)
         self.url_entry.bind("<FocusOut>", self._on_target_change)
-        self.deep_scan_button = tk.Button(entry_row, text="DEEP SCAN", command=self.start_deep_scan,
+        self.deep_scan_button = tk.Button(entry_row, text="DEEP CRAWL", command=self.start_deep_scan,
                                            bg="#9b2438", fg="white", activebackground="#bd334b",
                                            relief="flat", padx=15, pady=8, font=("Segoe UI", 9, "bold"))
         self.deep_scan_button.pack(side="left", padx=3)
@@ -488,10 +488,10 @@ class DarthScannerApp:
             return
         if not messagebox.askyesno(
             "Confirm deep authorized scan",
-            f"Run a full read-only crawl and security analysis for:\\n\\n{target}\\n\\n"
-            f"Budget: up to 150 pages and 350 HTTP requests, with a 0.5-second minimum delay. "
+            f"Run a full website crawl and security analysis for:\\n\\n{target}\\n\\n"
+            f"Budget: up to 150 discovered URL resources and 350 HTTP requests, with a 0.5-second minimum delay. "
             f"Subdomain discovery: {'enabled' if self.include_subdomains_var.get() else 'disabled'}.\\n\\n"
-            "The scan can take several minutes. It follows same-origin links and JavaScript routes, "
+            "The crawl can take several minutes. It follows nested same-origin links, robots.txt and XML sitemaps, iframe routes, JavaScript assets and statically discovered API routes, "
             "but does not execute JavaScript, submit forms, follow redirects, or run destructive exploit tests. "
             "Only proceed if you are authorized for the selected host and any enabled subdomains."
         ):
@@ -543,8 +543,8 @@ class DarthScannerApp:
         self.stop_event.clear()
         self._set_running(True)
         self.stop_button.configure(state="normal")
-        self._log(f"Starting DEEP SCAN: {target}")
-        self._log("Full crawl enabled: up to 150 pages / 350 requests; following same-origin links and JavaScript-discovered routes.")
+        self._log(f"Starting DEEP CRAWL + FULL ANALYSIS: {target}")
+        self._log("Crawler enabled: up to 150 URL resources / 350 requests; HTML links, robots/sitemaps, iframes, JavaScript assets and static API routes.")
         self.worker = threading.Thread(
             target=self._run_deep_scan_process,
             args=(target, scope_path, output_dir, bool(self.cve_lookup_var.get()), github_repo),
@@ -589,8 +589,26 @@ class DarthScannerApp:
                 if not cve_lookup:
                     command.append("--no-cve-lookup")
                 code = cli_main(command, stop_event=self.stop_event)
-                self.events.put(("log", f"Deep scan report: {report_path}"))
-                self.events.put(("exit", f"Deep scan finished (status {code})."))
+                if code == 0 and report_path.exists():
+                    payload = json.loads(report_path.read_text(encoding="utf-8"))
+                    history_path = output_dir / "history.json"
+                    history = _load_history(history_path)
+                    lifecycle = update_full_scan_history(
+                        history,
+                        target,
+                        payload.get("findings", []),
+                        str(report_path),
+                    )
+                    _save_history(history_path, history)
+                    self.events.put((
+                        "log",
+                        "Dashboard history updated from full scan: "
+                        f"{len(payload.get('findings', []))} findings; "
+                        f"{len(lifecycle['new'])} new, {len(lifecycle['changed'])} changed, "
+                        f"{len(lifecycle['recurring'])} recurring."
+                    ))
+                self.events.put(("log", f"Full crawl report: {report_path}"))
+                self.events.put(("exit", f"Full crawl and analysis finished (status {code})."))
         except Exception as exc:
             self.events.put(("exit", f"Deep scan error: {exc}"))
 
