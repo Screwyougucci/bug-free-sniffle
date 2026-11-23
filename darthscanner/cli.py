@@ -120,7 +120,7 @@ def _write_bundle(args, *, target: str, requests_made: int, pages: list[dict],
         domain_discovery=domain_discovery,
     )
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, stop_event=None) -> int:
     args = _parser().parse_args(argv)
     try:
         if args.command == "audit-code":
@@ -180,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "scan":
             scope.validate_url(args.target)
-            client = SafeHttpClient(scope)
+            client = SafeHttpClient(scope, stop_event=stop_event)
             profile = args.profile
             responses = []
             discovered_subdomains = []
