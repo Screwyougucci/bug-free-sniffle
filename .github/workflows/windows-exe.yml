@@ -17,6 +17,7 @@ on:
       - "v0.20.0-pro-fuzz-source-cvss"
       - "v0.22.0-auto-poc-verification"
       - "v0.22.0-github-source-audit"
+      - "v0.23.0-real-finding-quality"
     tags:
       - "v*"
 
@@ -45,7 +46,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path release | Out-Null
           Copy-Item dist/DarthScanner.exe release/
           @'
-          DARTH SCANNER 0.22.0
+          DARTH SCANNER 0.23.0
 
           Run DarthScanner.exe to open the desktop dashboard.
           All scanning runs inside the desktop app. No terminal or separate engine is required.
