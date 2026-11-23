@@ -1,5 +1,13 @@
 # Darth Scanner — Web & Server Security Scanner
 
+## Version 0.23.0
+
+The desktop app now has a dedicated **DEEP SCAN** action. Unlike START WATCH (which deliberately performs one adaptive focus per cycle), DEEP SCAN runs one full web analysis pass with up to 150 pages and 350 requests, follows same-origin HTML links and JavaScript-discovered routes, fetches same-origin JavaScript assets for static review, and shares the same scope and request budget across discovery. It can take several minutes. It never executes JavaScript, submits forms, follows redirects, or requests common state-changing paths such as logout, delete, checkout, or unsubscribe. The Stop button cancels further requests.
+
+The crawler discovers nested routes from links and route-like strings in fetched JavaScript, respects base href, preserves distinct query routes, deduplicates URLs, and skips common state-changing endpoints.
+
+Missing or weak security headers and similar configuration advice are classified as hardening observations, shown separately from candidate vulnerabilities, excluded from actionable-candidate totals, and never assigned CVSS. Candidate findings still require validation; a static pattern or response anomaly is not automatically an exploit.
+
 ## Version 0.22.0
 
 Darth Scanner now has a GitHub source-review workflow. In the desktop app, paste a repository URL into **GITHUB REPOSITORY** for a manual review, or leave it blank and choose **GITHUB CODE AUDIT** to discover repository links from the website landing page. The app displays the discovered candidates and selects the first one; you must separately confirm that you are authorized to inspect that repository before source files are fetched. The last JSON report is saved beside that website's local scan history and can be opened with **VIEW REPORT**.
