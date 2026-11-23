@@ -565,6 +565,17 @@ def inspect_http(response) -> list[Finding]:
             ))
             break
 
+    # Missing or weak security controls are useful hardening advice, not exploits.
+    hardening_categories = {"http-headers", "csp", "cors", "information", "cookies", "cache"}
+    for finding in findings:
+        if finding.category in hardening_categories and finding.kind != "observation":
+            finding.severity = "info"
+            finding.kind = "hardening-observation"
+            finding.cvss_score = None
+            finding.cvss_version = None
+            finding.cvss_vector = None
+            finding.cve_ids = []
+
     return findings
 
 

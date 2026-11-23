@@ -72,6 +72,11 @@ class PassiveChecksTests(unittest.TestCase):
         titles = {finding.title for finding in findings}
         self.assertIn("Content Security Policy is missing", titles)
         self.assertIn("HSTS header is missing", titles)
+        by_title = {finding.title: finding for finding in findings}
+        self.assertEqual(by_title["Content Security Policy is missing"].severity, "info")
+        self.assertEqual(by_title["Content Security Policy is missing"].kind, "hardening-observation")
+        self.assertEqual(by_title["HSTS header is missing"].kind, "hardening-observation")
+        self.assertIsNone(by_title["Content Security Policy is missing"].cvss_score)
 
     def test_non_html_does_not_trigger_html_only_header_findings(self):
         response = HttpResponse("https://owned.example/api", 200,

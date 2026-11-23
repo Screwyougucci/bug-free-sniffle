@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import time
+from threading import Event
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
@@ -36,15 +37,22 @@ class _NoRedirect(HTTPRedirectHandler):
 class SafeHttpClient:
     """Single-threaded HTTP client. HEAD/OPTIONS responses never read response bodies."""
 
-    def __init__(self, scope: Scope, max_requests: int | None = None):
+    def __init__(self, scope: Scope, max_requests: int | None = None, stop_event: Event | None = None):
         self.scope = scope
         requested_limit = scope.max_requests if max_requests is None else max_requests
         self.max_requests = min(requested_limit, scope.max_requests)
         self.requests_made = 0
+        self.stop_event = stop_event
         self._last_request_at = 0.0
         self._opener = build_opener(_NoRedirect())
 
+    @property
+    def cancelled(self) -> bool:
+        return bool(self.stop_event and self.stop_event.is_set())
+
     def request(self, url: str, method: str = "GET") -> HttpResponse:
+        if self.cancelled:
+            raise RuntimeError("Scan cancelled by user.")
         method = method.upper()
         if method not in {"GET", "HEAD", "OPTIONS"}:
             raise ValueError("Only GET, HEAD, and OPTIONS are supported by the scanner.")
@@ -54,7 +62,11 @@ class SafeHttpClient:
 
         wait_for = self.scope.request_delay_seconds - (time.monotonic() - self._last_request_at)
         if self._last_request_at and wait_for > 0:
-            time.sleep(wait_for)
+            if self.stop_event is not None:
+                if self.stop_event.wait(wait_for):
+                    raise RuntimeError("Scan cancelled by user.")
+            else:
+                time.sleep(wait_for)
 
         request = Request(
             url,

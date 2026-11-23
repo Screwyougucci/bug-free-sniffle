@@ -135,6 +135,10 @@ class DarthScannerApp:
         self.url_entry.pack(side="left", fill="x", expand=True, ipady=9, padx=(0, 9))
         self.url_entry.bind("<Return>", self._on_target_change)
         self.url_entry.bind("<FocusOut>", self._on_target_change)
+        self.deep_scan_button = tk.Button(entry_row, text="DEEP SCAN", command=self.start_deep_scan,
+                                           bg="#9b2438", fg="white", activebackground="#bd334b",
+                                           relief="flat", padx=15, pady=8, font=("Segoe UI", 9, "bold"))
+        self.deep_scan_button.pack(side="left", padx=3)
         self.start_button = tk.Button(entry_row, text="START WATCH", command=self.start_watch,
                                       bg="#c0263d", fg="white", activebackground="#e03b55",
                                       relief="flat", padx=17, pady=8, font=("Segoe UI", 9, "bold"))
@@ -238,6 +242,11 @@ class DarthScannerApp:
         title_row.pack(fill="x", pady=(0, 8))
         tk.Label(title_row, text="DISCOVERY REGISTRY", bg="#151d2a", fg="#f3f6fb",
                  font=("Segoe UI", 10, "bold")).pack(side="left")
+        self.show_hardening_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(title_row, text="Show hardening advice", variable=self.show_hardening_var,
+                       command=self.refresh_dashboard, bg="#151d2a", fg="#b8c5d8",
+                       activebackground="#151d2a", activeforeground="white",
+                       selectcolor="#202a3a", font=("Segoe UI", 8)).pack(side="left", padx=12)
         tk.Button(title_row, text="REFRESH", command=self.refresh_dashboard, bg="#253247",
                   fg="white", relief="flat", padx=10, pady=4).pack(side="right")
         tk.Button(title_row, text="DOMAIN TREE", command=self.show_domain_tree, bg="#253247",
@@ -245,11 +254,11 @@ class DarthScannerApp:
         tk.Button(title_row, text="OPEN DATA FOLDER", command=self.open_data_folder, bg="#253247",
                   fg="white", relief="flat", padx=10, pady=4).pack(side="right", padx=6)
 
-        columns = ("status", "severity", "cvss", "title", "finding_id", "occurrences", "last_seen")
+        columns = ("status", "type", "severity", "cvss", "title", "finding_id", "occurrences", "last_seen")
         self.table = ttk.Treeview(findings_panel, columns=columns, show="headings", height=8)
-        widths = {"status": 95, "severity": 80, "cvss": 100, "title": 300, "finding_id": 190,
+        widths = {"status": 95, "type": 105, "severity": 80, "cvss": 100, "title": 300, "finding_id": 190,
                   "occurrences": 85, "last_seen": 155}
-        labels = {"status": "STATUS", "severity": "SEVERITY", "cvss": "CVSS", "title": "DISCOVERY",
+        labels = {"status": "STATUS", "type": "CLASS", "severity": "SEVERITY", "cvss": "CVSS", "title": "DISCOVERY",
                   "finding_id": "FINDING ID", "occurrences": "SEEN", "last_seen": "LAST SEEN"}
         for col in columns:
             self.table.heading(col, text=labels[col])
@@ -277,9 +286,10 @@ class DarthScannerApp:
         self.log.configure(state="disabled")
 
     def _set_running(self, running: bool):
-        self.status.configure(text="● WATCHING" if running else "● IDLE",
+        self.status.configure(text="● RUNNING" if running else "● IDLE",
                               fg="#e4a0a8" if running else "#a8adb9")
         self.start_button.configure(state="disabled" if running else "normal")
+        self.deep_scan_button.configure(state="disabled" if running else "normal")
         self.stop_button.configure(state="normal" if running else "disabled")
         self.fuzz_button.configure(state="disabled" if running else "normal")
         self.github_audit_button.configure(state="disabled" if running else "normal")
@@ -361,7 +371,7 @@ class DarthScannerApp:
             findings, summary = audit_github_repository(repository, stop_event=self.stop_event)
             payload = {
                 "tool": APP_NAME,
-                "version": "0.22.0",
+                "version": "0.23.0",
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "repository": summary,
                 "finding_count": len(findings),
@@ -461,6 +471,128 @@ class DarthScannerApp:
             daemon=True,
         )
         self.worker.start()
+
+    def start_deep_scan(self):
+        """Run one full discovery and analysis pass instead of one watch focus."""
+        if self.worker is not None and self.worker.is_alive():
+            messagebox.showinfo("Deep scan", "Stop the current run before starting a deep scan.")
+            return
+        if not self.authorized_var.get():
+            messagebox.showwarning("Authorization required",
+                "Confirm that you own this website or have explicit permission before scanning.")
+            return
+        try:
+            target, host = parse_target_url(self.url_var.get())
+        except ValueError as exc:
+            messagebox.showerror("Invalid website", str(exc))
+            return
+        if not messagebox.askyesno(
+            "Confirm deep authorized scan",
+            f"Run a full read-only crawl and security analysis for:\\n\\n{target}\\n\\n"
+            f"Budget: up to 150 pages and 350 HTTP requests, with a 0.5-second minimum delay. "
+            f"Subdomain discovery: {'enabled' if self.include_subdomains_var.get() else 'disabled'}.\\n\\n"
+            "The scan can take several minutes. It follows same-origin links and JavaScript routes, "
+            "but does not execute JavaScript, submit forms, follow redirects, or run destructive exploit tests. "
+            "Only proceed if you are authorized for the selected host and any enabled subdomains."
+        ):
+            return
+
+        folder = app_data_dir() / (target_id(target) + "-" + resource_id(target))
+        folder.mkdir(parents=True, exist_ok=True)
+        scope_path = folder / "scope.json"
+        output_dir = folder / "reports"
+        output_dir.mkdir(exist_ok=True)
+        scope = {
+            "authorized": True,
+            "allowed_hosts": [host],
+            "include_subdomains": bool(self.include_subdomains_var.get()),
+            "root_domain": host if self.include_subdomains_var.get() else None,
+            "max_pages": 150,
+            "max_requests": 350,
+            "max_subdomain_depth": int(self.subdomain_depth_var.get()),
+            "max_subdomain_hosts": int(self.subdomain_hosts_var.get()),
+            "request_delay_seconds": 0.5,
+            "timeout_seconds": 10,
+        }
+        scope_path.write_text(json.dumps(scope, indent=2), encoding="utf-8")
+
+        github_repo = self.github_repo_var.get().strip() or None
+        if self.github_auto_var.get() and not github_repo:
+            try:
+                first_page = SafeHttpClient(load_scope(scope_path), max_requests=1).get(target)
+                if first_page.status is not None and first_page.status < 400:
+                    candidates = discover_github_repositories(first_page.text, limit=10)
+                    if candidates:
+                        github_repo = candidates[0]
+                        self.github_repo_var.set(github_repo)
+                        self._log(f"GitHub repository candidates discovered: {', '.join(candidates)}")
+            except Exception as exc:
+                self._log(f"GitHub link discovery skipped: {exc}")
+        if github_repo and not messagebox.askyesno(
+            "Confirm GitHub repository authorization",
+            f"Also review this GitHub repository?\\n\\n{github_repo}\\n\\n"
+            "Confirm you own it or have explicit permission. Repository code is not executed or modified."
+        ):
+            github_repo = None
+
+        self.current_target = target
+        self.current_folder = output_dir
+        self.url_var.set(target)
+        self._clear_dashboard()
+        self.refresh_dashboard()
+        self.stop_event.clear()
+        self._set_running(True)
+        self.stop_button.configure(state="normal")
+        self._log(f"Starting DEEP SCAN: {target}")
+        self._log("Full crawl enabled: up to 150 pages / 350 requests; following same-origin links and JavaScript-discovered routes.")
+        self.worker = threading.Thread(
+            target=self._run_deep_scan_process,
+            args=(target, scope_path, output_dir, bool(self.cve_lookup_var.get()), github_repo),
+            daemon=True,
+        )
+        self.worker.start()
+
+    def _run_deep_scan_process(self, target: str, scope_path: Path, output_dir: Path,
+                               cve_lookup: bool, github_repo: str | None = None):
+        """Run one full scan and optional authorized GitHub source audit."""
+        writer = _QueueWriter(self.events)
+        try:
+            with redirect_stdout(writer), redirect_stderr(writer):
+                if github_repo:
+                    try:
+                        self.events.put(("log", f"Starting linked GitHub source review: {github_repo}"))
+                        github_findings, github_summary = audit_github_repository(
+                            github_repo, stop_event=self.stop_event
+                        )
+                        github_dir = output_dir.parent / "github-source-audit"
+                        github_dir.mkdir(parents=True, exist_ok=True)
+                        github_report = {
+                            "tool": APP_NAME, "version": "0.23.0",
+                            "generated_at": datetime.now(timezone.utc).isoformat(),
+                            "repository": github_summary, "finding_count": len(github_findings),
+                            "findings": [item.to_dict() for item in github_findings],
+                            "disclaimer": "Static source matches are unconfirmed review leads; repository code was not executed or modified."
+                        }
+                        github_path = github_dir / "latest-report.json"
+                        github_path.write_text(json.dumps(github_report, indent=2, ensure_ascii=False), encoding="utf-8")
+                        self.events.put(("log", f"GitHub audit: {github_summary['files_reviewed']} files, {len(github_findings)} review lead(s)."))
+                    except Exception as exc:
+                        self.events.put(("log", f"GitHub review skipped; website scan continues: {exc}"))
+
+                from .cli import main as cli_main
+                report_path = output_dir / "deep-scan-latest.json"
+                command = [
+                    "scan", "--target", target, "--scope", str(scope_path),
+                    "--acknowledge-authorization", "--profile", "full",
+                    "--focus", "all", "--output", str(report_path),
+                ]
+                if not cve_lookup:
+                    command.append("--no-cve-lookup")
+                code = cli_main(command, stop_event=self.stop_event)
+                self.events.put(("log", f"Deep scan report: {report_path}"))
+                self.events.put(("exit", f"Deep scan finished (status {code})."))
+        except Exception as exc:
+            self.events.put(("exit", f"Deep scan error: {exc}"))
 
     def show_fuzz_lab(self):
         """Open the bounded HTTP parameter fuzzing workspace."""
@@ -633,7 +765,7 @@ class DarthScannerApp:
                         github_dir = output_dir.parent / "github-source-audit"
                         github_dir.mkdir(parents=True, exist_ok=True)
                         github_report = {
-                            "tool": APP_NAME, "version": "0.22.0",
+                            "tool": APP_NAME, "version": "0.23.0",
                             "generated_at": datetime.now(timezone.utc).isoformat(),
                             "repository": github_summary, "finding_count": len(github_findings),
                             "findings": [item.to_dict() for item in github_findings],
@@ -741,9 +873,15 @@ class DarthScannerApp:
         for item in self.table.get_children():
             self.table.delete(item)
         ordered = sorted(registry.values(), key=lambda x: x.get("last_seen", ""), reverse=True)
+        hardening_categories = {"http-headers", "csp", "cors", "information", "cookies", "cache"}
         for item in ordered:
+            kind = item.get("kind") or ("hardening-observation" if item.get("category") in hardening_categories else "finding")
+            if kind == "hardening-observation" and not self.show_hardening_var.get():
+                continue
+            display_class = "HARDENING" if kind == "hardening-observation" else ("OBSERVATION" if kind == "observation" else "CANDIDATE")
             self.table.insert("", "end", values=(
                 str(item.get("status", "")).upper(),
+                display_class,
                 str(item.get("severity", "n/a")).upper(),
                 (f"{float(item['cvss_score']):.1f}" if isinstance(item.get("cvss_score"), (int, float)) else "N/A"),
                 item.get("title", "Untitled"),
