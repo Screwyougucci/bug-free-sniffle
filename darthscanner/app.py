@@ -286,9 +286,10 @@ class DarthScannerApp:
         self.log.configure(state="disabled")
 
     def _set_running(self, running: bool):
-        self.status.configure(text="● WATCHING" if running else "● IDLE",
+        self.status.configure(text="● RUNNING" if running else "● IDLE",
                               fg="#e4a0a8" if running else "#a8adb9")
         self.start_button.configure(state="disabled" if running else "normal")
+        self.deep_scan_button.configure(state="disabled" if running else "normal")
         self.stop_button.configure(state="normal" if running else "disabled")
         self.fuzz_button.configure(state="disabled" if running else "normal")
         self.github_audit_button.configure(state="disabled" if running else "normal")
