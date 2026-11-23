@@ -267,7 +267,18 @@ def inspect_http(response) -> list[Finding]:
     """Inspect one response without sending additional requests."""
     findings: list[Finding] = []
     if response.status is None:
-        return findings
+        # Configuration hardening is useful, but it is not a demonstrated exploit.
+    # Keep these observations out of vulnerability severity/CVSS totals.
+    hardening_categories = {"http-headers", "csp", "cors", "information", "cookies", "cache"}
+    for finding in findings:
+        if finding.category in hardening_categories:
+            finding.severity = "info"
+            finding.kind = "hardening-observation"
+            finding.cvss_score = None
+            finding.cvss_version = None
+            finding.cvss_vector = None
+            finding.cve_ids = []
+    return findings
     headers = response.headers
     is_html = "text/html" in headers.get("content-type", "").lower()
 
