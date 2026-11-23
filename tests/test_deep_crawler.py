@@ -11,6 +11,7 @@ class FakeClient:
         self.max_requests = max_requests
         self.requests_made = 0
         self.requested = []
+        self.cancelled = False
 
     def get(self, url):
         self.requests_made += 1
