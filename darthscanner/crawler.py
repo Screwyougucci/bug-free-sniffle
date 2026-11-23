@@ -19,7 +19,7 @@ _SKIP_PATH_PARTS = {
     "logout", "log-out", "signout", "sign-out", "delete", "remove",
     "unsubscribe", "purchase", "checkout", "confirm", "activate",
 }
-_ASSET_EXTENSIONS = {".js", ".mjs"}
+_ASSET_EXTENSIONS = (".js", ".mjs")
 _ROUTE_PATTERNS = (
     re.compile(r"""(?:(?:fetch|axios\.(?:get|post|put|patch|delete)|open)\s*\(\s*)?['"]((?:/|\./|\.\./)[^'"<>\\\s]{1,240})['"]""", re.I),
     re.compile(r"""(?:url|endpoint|api|path)\s*[:=]\s*['"]((?:/|\./|\.\./)[^'"<>\\\s]{1,240})['"]""", re.I),
