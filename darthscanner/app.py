@@ -238,6 +238,11 @@ class DarthScannerApp:
         title_row.pack(fill="x", pady=(0, 8))
         tk.Label(title_row, text="DISCOVERY REGISTRY", bg="#151d2a", fg="#f3f6fb",
                  font=("Segoe UI", 10, "bold")).pack(side="left")
+        self.show_hardening_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(title_row, text="Show hardening advice", variable=self.show_hardening_var,
+                       command=self.refresh_dashboard, bg="#151d2a", fg="#b8c5d8",
+                       activebackground="#151d2a", activeforeground="white",
+                       selectcolor="#202a3a", font=("Segoe UI", 8)).pack(side="left", padx=12)
         tk.Button(title_row, text="REFRESH", command=self.refresh_dashboard, bg="#253247",
                   fg="white", relief="flat", padx=10, pady=4).pack(side="right")
         tk.Button(title_row, text="DOMAIN TREE", command=self.show_domain_tree, bg="#253247",
@@ -245,11 +250,11 @@ class DarthScannerApp:
         tk.Button(title_row, text="OPEN DATA FOLDER", command=self.open_data_folder, bg="#253247",
                   fg="white", relief="flat", padx=10, pady=4).pack(side="right", padx=6)
 
-        columns = ("status", "severity", "cvss", "title", "finding_id", "occurrences", "last_seen")
+        columns = ("status", "type", "severity", "cvss", "title", "finding_id", "occurrences", "last_seen")
         self.table = ttk.Treeview(findings_panel, columns=columns, show="headings", height=8)
-        widths = {"status": 95, "severity": 80, "cvss": 100, "title": 300, "finding_id": 190,
+        widths = {"status": 95, "type": 105, "severity": 80, "cvss": 100, "title": 300, "finding_id": 190,
                   "occurrences": 85, "last_seen": 155}
-        labels = {"status": "STATUS", "severity": "SEVERITY", "cvss": "CVSS", "title": "DISCOVERY",
+        labels = {"status": "STATUS", "type": "CLASS", "severity": "SEVERITY", "cvss": "CVSS", "title": "DISCOVERY",
                   "finding_id": "FINDING ID", "occurrences": "SEEN", "last_seen": "LAST SEEN"}
         for col in columns:
             self.table.heading(col, text=labels[col])
@@ -741,9 +746,15 @@ class DarthScannerApp:
         for item in self.table.get_children():
             self.table.delete(item)
         ordered = sorted(registry.values(), key=lambda x: x.get("last_seen", ""), reverse=True)
+        hardening_categories = {"http-headers", "csp", "cors", "information", "cookies", "cache"}
         for item in ordered:
+            kind = item.get("kind") or ("hardening-observation" if item.get("category") in hardening_categories else "finding")
+            if kind == "hardening-observation" and not self.show_hardening_var.get():
+                continue
+            display_class = "HARDENING" if kind == "hardening-observation" else ("OBSERVATION" if kind == "observation" else "CANDIDATE")
             self.table.insert("", "end", values=(
                 str(item.get("status", "")).upper(),
+                display_class,
                 str(item.get("severity", "n/a")).upper(),
                 (f"{float(item['cvss_score']):.1f}" if isinstance(item.get("cvss_score"), (int, float)) else "N/A"),
                 item.get("title", "Untitled"),
