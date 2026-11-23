@@ -7,6 +7,7 @@ from darthscanner.identity import (
     resource_id,
     target_id,
     update_finding_registry,
+    update_full_scan_history,
 )
 
 
@@ -80,6 +81,38 @@ class DiscoveryIdentityTests(unittest.TestCase):
         resolved = update_finding_registry(history, [], complete_round=True, now="2026-01-05T00:00:00Z")
         self.assertEqual(resolved["resolved"], ["F-1"])
         self.assertEqual(history["finding_registry"]["F-1"]["status"], "resolved")
+
+
+    def test_full_scan_persists_findings_and_marks_round_complete(self):
+        history = {
+            "cycles_completed": 3,
+            "seen_finding_ids": ["OLD-1"],
+            "finding_registry": {},
+            "round_seen_finding_ids": [],
+        }
+        findings = [{
+            "finding_id": "NEW-1",
+            "category": "injection-review",
+            "kind": "finding",
+            "title": "Input handling review",
+            "severity": "medium",
+            "url": "https://example.test/search",
+            "evidence": "A bounded read-only check produced a repeatable signal.",
+        }]
+        result = update_full_scan_history(
+            history,
+            "https://example.test/",
+            findings,
+            "reports/deep-scan-latest.json",
+            now="2026-11-23T20:00:00Z",
+        )
+        self.assertEqual(result["new"], ["NEW-1"])
+        self.assertEqual(history["cycles_completed"], 4)
+        self.assertEqual(history["last_focus"], "all")
+        self.assertEqual(history["last_report"], "reports/deep-scan-latest.json")
+        self.assertEqual(history["target"], "https://example.test/")
+        self.assertIn("NEW-1", history["finding_registry"])
+        self.assertEqual(history["round_seen_finding_ids"], [])
 
 
 if __name__ == "__main__":
