@@ -650,6 +650,7 @@ class DarthScannerApp:
             "Install / update security tools",
             "Download the latest official Windows x64 releases of ffuf, Subfinder, httpx, Katana, and Nuclei?\n\n"
             "Archives are downloaded from official GitHub releases and SHA-256 checked against each publisher's checksum manifest. "
+            "The installer also offers Temurin Java 17 and OWASP ZAP through WinGet if they are missing. "
             "Executables stay inside Darth Scanner's local app-data folder. No tools are run during installation."
         ):
             return
@@ -708,9 +709,13 @@ class DarthScannerApp:
         tk.Spinbox(controls, from_=1, to=24, width=5, textvariable=duration_var,
                    bg="#202a3a", fg="#f7f9fc", insertbackground="white", relief="flat").pack(side="left", padx=(8, 18))
         nuclei_var = tk.BooleanVar(value=False)
+        zap_var = tk.BooleanVar(value=False)
         tk.Checkbutton(panel, text="Enable Nuclei checks (misconfiguration/exposure/SSL tags only; sends test requests)",
                        variable=nuclei_var, bg="#151d2a", fg="#d7d9e0", activebackground="#151d2a",
                        activeforeground="white", selectcolor="#202a3a", font=("Segoe UI", 9)).pack(anchor="w", pady=(14, 4))
+        tk.Checkbutton(panel, text="Include OWASP ZAP passive spider (browser-based crawling can interact with page controls)",
+                       variable=zap_var, bg="#151d2a", fg="#d7d9e0", activebackground="#151d2a",
+                       activeforeground="white", selectcolor="#202a3a", font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 4))
         subdomain_note = ("Subdomain discovery and bounded checks are enabled for the root domain and its discovered subdomains."
                           if self.include_subdomains_var.get() else
                           "Subdomain discovery is off; active tools stay on the exact target hostname.")
@@ -738,6 +743,7 @@ class DarthScannerApp:
                 + ("This includes discovered subdomains. Confirm authorization for the root domain and all subdomains.\n\n"
                    if self.include_subdomains_var.get() else "")
                 + ("Nuclei checks are ENABLED and send vulnerability test requests.\n\n" if nuclei_var.get() else "")
+                + ("OWASP ZAP passive spider is ENABLED; its browser spider may interact with page controls.\n\n" if zap_var.get() else "")
                 + "All tools are rate-limited. Results and checkpoints remain on this PC."
             ):
                 return
@@ -755,7 +761,7 @@ class DarthScannerApp:
             self._log(f"Toolchain reports/checkpoint: {output_dir}")
             self.worker = threading.Thread(
                 target=self._run_toolchain_process,
-                args=(target, output_dir, duration, bool(self.include_subdomains_var.get()), bool(nuclei_var.get())),
+                args=(target, output_dir, duration, bool(self.include_subdomains_var.get()), bool(nuclei_var.get()), bool(zap_var.get())),
                 daemon=True,
             )
             self.worker.start()
@@ -766,11 +772,11 @@ class DarthScannerApp:
                   font=("Segoe UI", 9, "bold")).pack(anchor="e")
 
     def _run_toolchain_process(self, target: str, output_dir: Path, duration: int,
-                               include_subdomains: bool, run_nuclei: bool):
+                               include_subdomains: bool, run_nuclei: bool, run_zap: bool):
         try:
             state = run_toolchain_watch(
                 target, output_dir, duration_hours=duration,
-                include_subdomains=include_subdomains, run_nuclei=run_nuclei,
+                include_subdomains=include_subdomains, run_nuclei=run_nuclei, run_zap=run_zap,
                 stop_event=self.stop_event,
                 progress=lambda message: self.events.put(("log", message)),
             )
