@@ -2,10 +2,12 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from darthscanner.zap_engine import (
     ZapNotInstalledError,
     alerts_to_findings,
+    build_launch_command,
     find_zap_launcher,
     scope_regex_for_target,
 )
@@ -52,6 +54,18 @@ class ZapEngineTests(unittest.TestCase):
 
     def test_alert_without_url_is_ignored(self):
         self.assertEqual(alerts_to_findings([{"name": "bad"}]), [])
+
+    def test_batch_launcher_uses_cmd_on_windows(self):
+        with patch("darthscanner.zap_engine.os.name", "nt"):
+            command = build_launch_command(Path("C:/ZAP/zap.bat"), 8090, "secret")
+        self.assertEqual(command[:3], ["cmd.exe", "/c", "C:/ZAP/zap.bat"])
+        self.assertIn("127.0.0.1", command)
+        self.assertIn("api.key=secret", command)
+
+    def test_executable_launcher_runs_directly(self):
+        with patch("darthscanner.zap_engine.os.name", "nt"):
+            command = build_launch_command(Path("C:/ZAP/zap.exe"), 8090, "secret")
+        self.assertEqual(command[0], "C:/ZAP/zap.exe")
 
     def test_launcher_can_be_configured_by_environment(self):
         with tempfile.TemporaryDirectory() as folder:
