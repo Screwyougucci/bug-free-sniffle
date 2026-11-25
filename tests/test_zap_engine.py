@@ -60,7 +60,6 @@ class ZapEngineTests(unittest.TestCase):
             command = build_launch_command(Path("C:/ZAP/zap.bat"), 8090, "secret")
         self.assertEqual(command[:2], ["cmd.exe", "/c"])
         self.assertEqual(command[2].replace("\\", "/"), "C:/ZAP/zap.bat")
-        self.assertEqual(command[2].replace("\\", "/"), "C:/ZAP/zap.bat")
         self.assertIn("127.0.0.1", command)
         self.assertIn("api.key=secret", command)
 
