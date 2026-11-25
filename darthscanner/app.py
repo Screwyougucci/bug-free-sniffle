@@ -1247,6 +1247,9 @@ class DarthScannerApp:
             if not messagebox.askyesno("Stop scanner?", "Stop the active check and close Darth Scanner?"):
                 return
             self.stop_event.set()
+            # Give managed engines (including the local ZAP daemon) time to
+            # stop cleanly before the desktop process exits.
+            self.worker.join(timeout=12)
         self.root.destroy()
 
 
