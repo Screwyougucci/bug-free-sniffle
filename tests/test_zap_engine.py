@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from darthscanner.zap_engine import (
+    ZapEngine,
     ZapNotInstalledError,
     ZapRuntime,
     alerts_to_findings,
