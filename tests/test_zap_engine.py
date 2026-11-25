@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from darthscanner.zap_engine import (
     ZapNotInstalledError,
+    ZapRuntime,
     alerts_to_findings,
     build_launch_command,
     find_zap_launcher,
@@ -78,6 +79,49 @@ class ZapEngineTests(unittest.TestCase):
         with patch("darthscanner.zap_engine.os.name", "nt"):
             command = build_launch_command(launcher, 8090, "secret")
         self.assertEqual(command[0].replace("\\", "/"), "C:/ZAP/zap.exe")
+
+    def test_scan_orchestration_uses_zap_and_filters_out_of_scope_results(self):
+        calls = []
+        def fake_api(component, kind, operation, params):
+            calls.append((component, kind, operation, params))
+            if (component, kind, operation) == ("core", "view", "version"):
+                return {"version": "2.17.0"}
+            if (component, kind, operation) == ("context", "action", "newContext"):
+                return {"contextId": "1"}
+            if (component, kind, operation) == ("spider", "action", "scan"):
+                return {"scan": "1"}
+            if (component, kind, operation) == ("spider", "view", "status"):
+                return {"status": "100"}
+            if (component, kind, operation) == ("clientSpider", "action", "scan"):
+                return {"scan": "2"}
+            if (component, kind, operation) == ("clientSpider", "view", "status"):
+                return {"status": "complete"}
+            if (component, kind, operation) == ("pscan", "view", "recordsToScan"):
+                return {"recordsToScan": "0"}
+            if (component, kind, operation) == ("core", "view", "alerts"):
+                return {"alerts": [
+                    {"name": "In-scope alert", "risk": "Medium", "confidence": "High",
+                     "url": "https://owned.example/login", "cweid": "200"},
+                    {"name": "External alert", "risk": "High", "confidence": "High",
+                     "url": "https://outside.example/login"},
+                ]}
+            if (component, kind, operation) == ("core", "view", "urls"):
+                return {"urls": ["https://owned.example/", "https://outside.example/"]}
+            return {}
+
+        engine = ZapEngine(api_call=fake_api)
+        engine.runtime = ZapRuntime(
+            process=None, base_url="http://127.0.0.1:8090",
+            api_key="test-key", launcher=PureWindowsPath("C:/ZAP/zap.bat"),
+        )
+        result = engine.scan("https://owned.example/")
+        self.assertEqual(result["engine_version"], "2.17.0")
+        self.assertEqual(result["discovered_url_count"], 1)
+        self.assertEqual(result["alert_count"], 1)
+        self.assertEqual(result["out_of_scope_alerts_excluded"], 1)
+        self.assertEqual(len(result["findings"]), 1)
+        include_call = next(item for item in calls if item[:3] == ("context", "action", "includeInContext"))
+        self.assertEqual(include_call[3]["regex"], r"^https://owned\\.example/.*$")
 
     def test_launcher_can_be_configured_by_environment(self):
         with tempfile.TemporaryDirectory() as folder:
