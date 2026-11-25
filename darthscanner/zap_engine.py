@@ -89,6 +89,22 @@ def scope_regex_for_target(target: str) -> str:
     return f"^{re.escape(parts.scheme)}://{host}{re.escape(port)}/.*$"
 
 
+def is_same_origin(target: str, candidate: str) -> bool:
+    """Check exact scheme, hostname, and port; never treat subdomains as in scope."""
+    try:
+        base = urlsplit(target)
+        other = urlsplit(candidate)
+        return (
+            base.scheme.lower() == other.scheme.lower()
+            and (base.hostname or "").encode("idna").decode("ascii").lower()
+            == (other.hostname or "").encode("idna").decode("ascii").lower()
+            and base.port == other.port
+            and base.scheme.lower() in {"http", "https"}
+        )
+    except (UnicodeError, ValueError):
+        return False
+
+
 def build_launch_command(launcher: Path, port: int, api_key: str) -> list[str]:
     """Build a Windows-safe command for the official batch or executable launcher."""
     arguments = [
@@ -408,11 +424,15 @@ class ZapEngine:
         alerts = alert_payload.get("alerts", [])
         if not isinstance(alerts, list):
             alerts = []
+        in_scope_alerts = [
+            item for item in alerts if is_same_origin(target, str(item.get("url") or ""))
+        ]
         url_payload = self._api("core", "view", "urls")
         urls = url_payload.get("urls", [])
         if not isinstance(urls, list):
             urls = []
-        findings = alerts_to_findings(alerts)
+        in_scope_urls = [item for item in urls if is_same_origin(target, str(item))]
+        findings = alerts_to_findings(in_scope_alerts)
         return {
             "engine": "OWASP ZAP",
             "engine_version": version,
@@ -420,9 +440,10 @@ class ZapEngine:
             "traditional_spider": "completed",
             "client_spider": client_spider_status,
             "active_scan": active_status,
-            "discovered_url_count": len(urls),
-            "discovered_urls": [_safe_evidence_url(item) for item in urls[:5000]],
-            "alert_count": len(alerts),
+            "discovered_url_count": len(in_scope_urls),
+            "discovered_urls": [_safe_evidence_url(item) for item in in_scope_urls[:5000]],
+            "alert_count": len(in_scope_alerts),
+            "out_of_scope_alerts_excluded": len(alerts) - len(in_scope_alerts),
             "findings": [item.to_dict() for item in findings],
             "limitations": [
                 "ZAP alerts are scanner findings and require human validation.",
