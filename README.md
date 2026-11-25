@@ -1,5 +1,13 @@
 # Darth Scanner — Web & Server Security Scanner
 
+## Version 0.25.0 — OWASP ZAP scanning engine
+
+Darth Scanner now integrates the official **OWASP Zed Attack Proxy (ZAP)** engine instead of relying only on its in-house HTTP checks. Use **OWASP ZAP ENGINE** in the desktop app to run ZAP's traditional spider, its browser-based Client Spider when the installed ZAP build has that add-on available, and ZAP's passive vulnerability rules. ZAP alerts are normalized into Darth's finding registry and saved to `zap-engine/latest-report.json`; discovered URLs and lifecycle history are saved with the target.
+
+**Install prerequisite:** ZAP must currently be installed separately. Click **GET ZAP** in the app or visit https://www.zaproxy.org/download/. Windows installations require Java 17 or newer. If Darth Scanner cannot locate `zap.bat`, set the Windows user environment variable `DARTH_ZAP_PATH` to the full path of `zap.bat`, then restart the app. The engine is started locally as a daemon on `127.0.0.1` with a random per-run API key; the API is not exposed to other computers. Darth Scanner shuts down the daemon after the scan.
+
+Passive crawling and passive rules are the default. The browser-based Client Spider executes client-side JavaScript and can interact with page navigation or controls, so use a staging copy when those interactions could change data. The **Enable active scan** option is off by default and requires a second confirmation; active scanning sends test requests and may affect fragile or production services. Keep scans within systems you own or are explicitly authorized to assess. A ZAP alert is a finding to validate, not automatic proof of a working exploit. Reports omit raw request/response bodies and redact common secret values. This first integration uses the installed ZAP engine; automatic first-run engine download/management is a follow-up, not included in 0.25.0.
+
 ## Version 0.24.0
 
 The desktop app's **DEEP CRAWL** action now performs a full, bounded discovery pass followed by the full security-analysis profile. It can review up to 150 URL resources and 350 HTTP requests per run, with the configured 0.5-second delay. It discovers URLs from nested HTML links, iframe sources, robots.txt Sitemap directives, XML sitemap indexes and URL sets, same-origin JavaScript assets, and static API/route strings in those scripts. Query routes are kept distinct; fragments and duplicate URLs are removed. The crawler remains same-origin and obeys the explicit authorized scope and shared request budget. Common state-changing paths such as logout, delete, checkout, and unsubscribe are skipped.
