@@ -65,9 +65,13 @@ def find_zap_launcher() -> Path | None:
         base = Path(root)
         candidates.extend((
             base / "ZAP" / "Zed Attack Proxy" / "zap.bat",
+            base / "ZAP" / "Zed Attack Proxy" / "ZAP.exe",
             base / "OWASP" / "Zed Attack Proxy" / "zap.bat",
+            base / "OWASP" / "Zed Attack Proxy" / "ZAP.exe",
             base / "Programs" / "ZAP" / "Zed Attack Proxy" / "zap.bat",
+            base / "Programs" / "ZAP" / "Zed Attack Proxy" / "ZAP.exe",
             base / "Programs" / "OWASP" / "Zed Attack Proxy" / "zap.bat",
+            base / "Programs" / "OWASP" / "Zed Attack Proxy" / "ZAP.exe",
         ))
     for candidate in candidates:
         if candidate.is_file() and candidate.name.lower() in {"zap.bat", "zap.exe"}:
