@@ -547,14 +547,15 @@ def run_toolchain_watch(target: str, output_dir: Path, *, duration_hours: int = 
         report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
         (output_dir / "latest-report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
         progress(f"Combined cycle report saved: {report_path}")
-        state["last_completed_cycle"] = cycle
-        state["last_completed_cycle"] = cycle
+        interrupted = stop_event is not None and stop_event.is_set()
+        if not interrupted:
+            state["last_completed_cycle"] = cycle
         state["last_cycle_at"] = datetime.now(timezone.utc).isoformat()
-        state["status"] = "paused" if stop_event is not None and stop_event.is_set() else "running"
+        state["status"] = "paused" if interrupted else "running"
         state["updated_at"] = datetime.now(timezone.utc).isoformat()
         state_path.write_text(json.dumps(state, indent=2), encoding="utf-8")
-        progress(f"Cycle {cycle} checkpoint saved. Results: {cycle_dir}")
-        if stop_event is not None and stop_event.is_set():
+        progress(f"Cycle {cycle} {'partial output' if interrupted else 'checkpoint'} saved. Results: {cycle_dir}")
+        if interrupted:
             break
         cycle += 1
         sleep_until = min(time.time() + cycle_interval_seconds, float(state["deadline"]))
