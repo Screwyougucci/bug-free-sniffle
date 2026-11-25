@@ -202,7 +202,7 @@ def _java_17_available() -> bool:
     try:
         result = subprocess.run([java, "-version"], stdout=subprocess.PIPE,
                                 stderr=subprocess.STDOUT, text=True, timeout=8)
-        match = re.search(r'version "?(?:1\\.)?(\\d+)', result.stdout or "", re.IGNORECASE)
+        match = re.search(r'version "?(?:1\.)?(\d+)', result.stdout or "", re.IGNORECASE)
         return bool(match and int(match.group(1)) >= 17)
     except (OSError, subprocess.TimeoutExpired):
         return False
