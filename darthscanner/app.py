@@ -405,7 +405,7 @@ class DarthScannerApp:
             findings, summary = audit_github_repository(repository, stop_event=self.stop_event)
             payload = {
                 "tool": APP_NAME,
-                "version": "0.25.0",
+                "version": "0.26.0",
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "repository": summary,
                 "finding_count": len(findings),
@@ -601,7 +601,7 @@ class DarthScannerApp:
                         github_dir = output_dir.parent / "github-source-audit"
                         github_dir.mkdir(parents=True, exist_ok=True)
                         github_report = {
-                            "tool": APP_NAME, "version": "0.23.0",
+                            "tool": APP_NAME, "version": "0.26.0",
                             "generated_at": datetime.now(timezone.utc).isoformat(),
                             "repository": github_summary, "finding_count": len(github_findings),
                             "findings": [item.to_dict() for item in github_findings],
@@ -863,7 +863,7 @@ class DarthScannerApp:
                 progress=lambda message: self.events.put(("log", message)),
             )
             payload["tool"] = APP_NAME
-            payload["version"] = "0.25.0"
+            payload["version"] = "0.26.0"
             payload["generated_at"] = datetime.now(timezone.utc).isoformat()
             report_path = output_dir / "latest-report.json"
             report_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -1010,7 +1010,7 @@ class DarthScannerApp:
                 (correlation_dir / "index.json").write_text(json.dumps({"tool": APP_NAME, "correlation_count": len(correlations), "correlations": correlations, "note": "Correlated hypotheses only; no exploit is confirmed and no CVSS is assigned."}, indent=2), encoding="utf-8")
                 payload = {
                     "tool": APP_NAME,
-                    "version": "0.21.0",
+                    "version": "0.26.0",
                     "generated_at": datetime.now(timezone.utc).isoformat(),
                     "target": sanitize_url(url),
                     "requests_made": client.requests_made,
@@ -1061,7 +1061,7 @@ class DarthScannerApp:
                         github_dir = output_dir.parent / "github-source-audit"
                         github_dir.mkdir(parents=True, exist_ok=True)
                         github_report = {
-                            "tool": APP_NAME, "version": "0.23.0",
+                            "tool": APP_NAME, "version": "0.26.0",
                             "generated_at": datetime.now(timezone.utc).isoformat(),
                             "repository": github_summary, "finding_count": len(github_findings),
                             "findings": [item.to_dict() for item in github_findings],
