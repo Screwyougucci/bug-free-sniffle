@@ -656,7 +656,7 @@ class DarthScannerApp:
         summary = (
             f"Run OWASP ZAP's traditional spider, browser-based Client Spider when available, "
             f"and passive vulnerability rules against:\n\n{target}\n\n"
-            "The ZAP API will listen only on this computer. Crawl scope is restricted to the exact hostname."
+            "The browser spider runs client-side JavaScript and may interact with page navigation or controls. Use staging if those actions could change data. The ZAP API listens only on this computer; crawl scope is restricted to the exact hostname."
         )
         if not messagebox.askyesno("Confirm OWASP ZAP scan", summary):
             return
