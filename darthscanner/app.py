@@ -655,7 +655,7 @@ class DarthScannerApp:
         active_scan = bool(self.zap_active_var.get())
         summary = (
             f"Run OWASP ZAP's traditional spider, browser-based Client Spider when available, "
-            f"and passive vulnerability rules against:\\n\\n{target}\\n\\n"
+            f"and passive vulnerability rules against:\n\n{target}\n\n"
             "The ZAP API will listen only on this computer. Crawl scope is restricted to the exact hostname."
         )
         if not messagebox.askyesno("Confirm OWASP ZAP scan", summary):
