@@ -507,7 +507,7 @@ class DarthScannerApp:
             return
         if not messagebox.askyesno(
             "Confirm deep authorized scan",
-            f"Run a full website crawl and security analysis for:\\n\\n{target}\\n\\n"
+            f"Run a full website crawl and security analysis for:\n\\n{target}\\n\\n"
             f"Budget: up to 150 discovered URL resources and 350 HTTP requests, with a 0.5-second minimum delay. "
             f"Subdomain discovery: {'enabled' if self.include_subdomains_var.get() else 'disabled'}.\\n\\n"
             "The crawl can take several minutes. It follows nested same-origin links, robots.txt and XML sitemaps, iframe routes, JavaScript assets and statically discovered API routes, "
