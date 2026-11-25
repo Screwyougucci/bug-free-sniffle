@@ -1,5 +1,17 @@
 # Darth Scanner — Web & Server Security Scanner
 
+## Version 0.26.0 — managed multi-tool assessment
+
+Darth Scanner now includes an in-app **INSTALL / UPDATE TOOLS** manager and **FULL TOOLCHAIN** assessment. The installer downloads official Windows x64 release archives for ffuf, Subfinder, httpx, Katana, and Nuclei from each project's GitHub releases. It requires the publisher's checksum manifest and rejects archives whose SHA-256 does not match. It extracts only the expected executable into `%LOCALAPPDATA%\\DarthScanner\\tools\\bin`; no system PATH edits are made.
+
+The long-running coordinator runs Subfinder for passive subdomain discovery only when the existing subdomain option is enabled, then probes the authorized host set with httpx, crawls with Katana, and performs GET-only path discovery with ffuf. ffuf uses a small built-in benign path list, a 2 requests/second rate limit, two workers, and a 3-minute per-host limit; Katana is depth-limited to 3 and rate-limited to 2 requests/second. Discovered subdomains are actively checked only when the user explicitly enables subdomain mode and confirms authorization for the root domain and all subdomains. Host count is capped at 25 and active hosts per cycle at 10.
+
+The assessment runs in 30-minute cycles for a user-selected duration of 1–24 hours. Each completed cycle writes a checkpoint and separate tool outputs under the target's `toolchain/cycle-NNNN` folder. Pressing Stop terminates the active tool process and saves the last completed cycle; starting the toolchain again for the same target resumes from that checkpoint if the original session has time remaining. Reports are local to the PC.
+
+Nuclei is installed with the other tools but is **off by default**. If explicitly enabled, the coordinator selects only `misconfig`, `exposure`, and `ssl` template tags, excludes known intrusive/fuzz/DoS/brute-force tags, and limits request rate and concurrency. Nuclei matches are still candidates requiring manual validation, not proof of a working exploit. The toolchain does not run credential attacks, upload tests, destructive payloads, or denial-of-service tests. It does not automatically run ZAP's browser-based client spider; that remains a separate action because it can execute client-side JavaScript and interact with page controls. ZAP continues to be installed separately and requires Java 17+.
+
+All tools are third-party software; their licenses and release cadence remain with their respective maintainers. The installer is Windows x64 only in this release. A missing or unpublished official checksum manifest causes installation to fail closed rather than downloading an unverifiable executable.
+
 ## Version 0.25.0 — OWASP ZAP scanning engine
 
 Darth Scanner now integrates the official **OWASP Zed Attack Proxy (ZAP)** engine instead of relying only on its in-house HTTP checks. Use **OWASP ZAP ENGINE** in the desktop app to run ZAP's traditional spider, its browser-based Client Spider when the installed ZAP build has that add-on available, and ZAP's passive vulnerability rules. ZAP alerts are normalized into Darth's finding registry and saved to `zap-engine/latest-report.json`; discovered URLs and lifecycle history are saved with the target.
