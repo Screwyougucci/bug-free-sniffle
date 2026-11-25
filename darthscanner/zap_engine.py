@@ -224,7 +224,7 @@ class ZapEngine:
             raise ZapEngineError(f"ZAP API error: {payload.get('message')}")
         return payload if isinstance(payload, dict) else {}
 
-    def start(self, *, startup_timeout: float = 90.0) -> str:
+    def start(self, *, startup_timeout: float = 90.0, stop_event=None) -> str:
         if self.runtime is not None:
             return str(self._api("core", "view", "version").get("version", "unknown"))
         if self.launcher is None or not self.launcher.is_file():
@@ -249,6 +249,9 @@ class ZapEngine:
         deadline = time.monotonic() + startup_timeout
         last_error = "waiting for ZAP API"
         while time.monotonic() < deadline:
+            if stop_event is not None and stop_event.is_set():
+                self.close()
+                raise ZapEngineError("Scan stopped during ZAP startup.")
             if process.poll() is not None:
                 self.close()
                 raise ZapEngineError("OWASP ZAP exited during startup. Check its Java 17+ installation.")
@@ -300,7 +303,7 @@ class ZapEngine:
         parts = urlsplit(target)
         if parts.scheme not in {"http", "https"} or not parts.hostname:
             raise ValueError("Target must be a valid HTTP or HTTPS URL.")
-        version = self.start()
+        version = self.start(stop_event=stop_event)
         context_name = "Darth-" + secrets.token_hex(6)
         self._api("core", "action", "newSession", name="darth-" + secrets.token_hex(6), overwrite="true")
         context = self._api("context", "action", "newContext", contextName=context_name)
