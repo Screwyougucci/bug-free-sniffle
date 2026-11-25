@@ -72,9 +72,9 @@ class ToolchainTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "katana.jsonl"
             path.write_text(
-                '{"url":"https://example.com/a"}\\n'
-                '{"url":"https://other.test/b"}\\n'
-                '{"url":"https://sub.example.com/c"}\\n', encoding="utf-8"
+                '{"url":"https://example.com/a"}\n'
+                '{"url":"https://other.test/b"}\n'
+                '{"url":"https://sub.example.com/c"}\n', encoding="utf-8"
             )
             self.assertEqual(_katana_urls(path, "https://example.com", False), ["https://example.com/a"])
 
@@ -82,8 +82,8 @@ class ToolchainTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / "nuclei.jsonl"
             path.write_text(
-                '{"template-id":"example-check","info":{"name":"Example","severity":"low"},"matched-at":"https://example.com/a"}\\n'
-                '{"template-id":"other-check","info":{"name":"Other","severity":"medium"},"matched-at":"https://evil.test/b"}\\n',
+                '{"template-id":"example-check","info":{"name":"Example","severity":"low"},"matched-at":"https://example.com/a"}\n'
+                '{"template-id":"other-check","info":{"name":"Other","severity":"medium"},"matched-at":"https://evil.test/b"}\n',
                 encoding="utf-8"
             )
             rows = _nuclei_findings(path, "https://example.com", False)
