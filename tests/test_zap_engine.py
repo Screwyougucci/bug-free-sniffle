@@ -58,8 +58,8 @@ class ZapEngineTests(unittest.TestCase):
     def test_batch_launcher_uses_cmd_on_windows(self):
         with patch("darthscanner.zap_engine.os.name", "nt"):
             command = build_launch_command(Path("C:/ZAP/zap.bat"), 8090, "secret")
-        self.assertEqual(command[:3], ["cmd.exe", "/c", command[2]]) 
-        self.assertEqual(command[2].replace("\\\\", "/"), "C:/ZAP/zap.bat")
+        self.assertEqual(command[:3], ["cmd.exe", "/c", command[2]])
+        self.assertEqual(command[2].replace("\\", "/"), "C:/ZAP/zap.bat")
         self.assertIn("127.0.0.1", command)
         self.assertIn("api.key=secret", command)
 
