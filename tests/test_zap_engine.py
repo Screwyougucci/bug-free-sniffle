@@ -9,6 +9,7 @@ from darthscanner.zap_engine import (
     alerts_to_findings,
     build_launch_command,
     find_zap_launcher,
+    is_same_origin,
     scope_regex_for_target,
 )
 
@@ -22,6 +23,14 @@ class ZapEngineTests(unittest.TestCase):
     def test_scope_regex_rejects_invalid_target(self):
         with self.assertRaises(ValueError):
             scope_regex_for_target("file:///etc/passwd")
+
+    def test_result_filter_rejects_external_hosts_and_subdomains(self):
+        target = "https://owned.example:8443/"
+        self.assertTrue(is_same_origin(target, "https://owned.example:8443/path"))
+        self.assertFalse(is_same_origin(target, "https://api.owned.example:8443/path"))
+        self.assertFalse(is_same_origin(target, "https://outside.example:8443/path"))
+        self.assertFalse(is_same_origin(target, "http://owned.example:8443/path"))
+        self.assertFalse(is_same_origin(target, "https://owned.example/path"))
 
     def test_zap_alerts_are_normalized_and_secrets_redacted(self):
         alerts = [{
