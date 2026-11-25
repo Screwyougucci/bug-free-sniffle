@@ -47,7 +47,10 @@ def find_zap_launcher() -> Path | None:
     candidates: list[Path] = []
     if configured:
         path = Path(configured).expanduser()
-        candidates.append(path / "zap.bat" if path.is_dir() else path)
+        if path.is_dir():
+            candidates.extend((path / "zap.bat", path / "zap.exe", path / "ZAP.exe"))
+        else:
+            candidates.append(path)
     for name in ("zap.bat", "zap.exe"):
         found = shutil.which(name)
         if found:
@@ -79,6 +82,19 @@ def scope_regex_for_target(target: str) -> str:
     host = re.escape(parts.hostname.encode("idna").decode("ascii"))
     port = f":{parts.port}" if parts.port else ""
     return f"^{re.escape(parts.scheme)}://{host}{re.escape(port)}/.*$"
+
+
+def build_launch_command(launcher: Path, port: int, api_key: str) -> list[str]:
+    """Build a Windows-safe command for the official batch or executable launcher."""
+    arguments = [
+        "-daemon", "-host", "127.0.0.1", "-port", str(port),
+        "-config", f"api.key={api_key}",
+        "-config", "api.addrs.addr.name=127.0.0.1",
+        "-config", "api.addrs.addr.regex=false",
+    ]
+    if os.name == "nt" and launcher.suffix.lower() == ".bat":
+        return ["cmd.exe", "/c", str(launcher), *arguments]
+    return [str(launcher), *arguments]
 
 
 def _free_loopback_port() -> int:
@@ -210,12 +226,7 @@ class ZapEngine:
             )
         api_key = secrets.token_urlsafe(32)
         base_url = f"http://127.0.0.1:{self.port}"
-        command = [
-            str(self.launcher), "-daemon", "-host", "127.0.0.1",
-            "-port", str(self.port), "-config", f"api.key={api_key}",
-            "-config", "api.addrs.addr.name=127.0.0.1",
-            "-config", "api.addrs.addr.regex=false",
-        ]
+        command = build_launch_command(self.launcher, self.port, api_key)
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
         try:
             process = self._popen(
