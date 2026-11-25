@@ -8,6 +8,7 @@ is a separate, explicit opt-in.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from hashlib import sha256
 import os
 from pathlib import Path
 import re
@@ -131,9 +132,12 @@ def alerts_to_findings(alerts: list[dict]) -> list[Finding]:
         confidence_text = str(alert.get("confidence") or "Low").split()[0].lower()
         confidence = confidence_map.get(confidence_text, "low")
         evidence_parts = []
-        for label, key in (("Parameter", "param"), ("Attack", "attack"), ("Evidence", "evidence")):
+        for label, key in (("Parameter", "param"), ("Evidence", "evidence")):
             if alert.get(key):
                 evidence_parts.append(f"{label}: {_redact(alert[key], 700)}")
+        if alert.get("attack"):
+            attack_hash = sha256(str(alert["attack"]).encode("utf-8", "replace")).hexdigest()
+            evidence_parts.append(f"Attack value SHA-256: {attack_hash} (raw value omitted)")
         evidence = "\n".join(evidence_parts) or "ZAP rule matched; inspect the alert details and request/response in the local ZAP session."
         cwe = str(alert.get("cweid") or "").strip()
         cwe_ids = [f"CWE-{cwe}"] if cwe.isdigit() and int(cwe) > 0 else []
