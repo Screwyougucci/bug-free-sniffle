@@ -11,6 +11,8 @@ from darthscanner.toolchain import (
     _read_jsonl,
     _safe_url,
     _ffuf_results,
+    _katana_urls,
+    _nuclei_findings,
     run_toolchain_watch,
 )
 
@@ -65,6 +67,28 @@ class ToolchainTests(unittest.TestCase):
             rows = _ffuf_results(path)
             self.assertEqual(rows[0]["status"], 403)
             self.assertNotIn("response", rows[0])
+
+    def test_katana_output_is_filtered_to_authorized_scope(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "katana.jsonl"
+            path.write_text(
+                '{"url":"https://example.com/a"}\\n'
+                '{"url":"https://other.test/b"}\\n'
+                '{"url":"https://sub.example.com/c"}\\n', encoding="utf-8"
+            )
+            self.assertEqual(_katana_urls(path, "https://example.com", False), ["https://example.com/a"])
+
+    def test_nuclei_output_is_filtered_to_authorized_scope(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "nuclei.jsonl"
+            path.write_text(
+                '{"template-id":"example-check","info":{"name":"Example","severity":"low"},"matched-at":"https://example.com/a"}\\n'
+                '{"template-id":"other-check","info":{"name":"Other","severity":"medium"},"matched-at":"https://evil.test/b"}\\n',
+                encoding="utf-8"
+            )
+            rows = _nuclei_findings(path, "https://example.com", False)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]["matched_url"], "https://example.com/a")
 
     def test_duration_is_bounded(self):
         with tempfile.TemporaryDirectory() as folder:
