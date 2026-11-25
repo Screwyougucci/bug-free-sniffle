@@ -9,6 +9,8 @@ from darthscanner.toolchain import (
     _checksum_for,
     _is_in_scope,
     _read_jsonl,
+    _safe_url,
+    _ffuf_results,
     run_toolchain_watch,
 )
 
@@ -45,6 +47,24 @@ class ToolchainTests(unittest.TestCase):
         self.assertIn("sitemap.xml", SAFE_PATH_WORDLIST)
         self.assertNotIn("union select", SAFE_PATH_WORDLIST.lower())
         self.assertNotIn("sleep(", SAFE_PATH_WORDLIST.lower())
+
+    def test_safe_url_redacts_secret_query_parameters(self):
+        safe = _safe_url("https://example.com/path?token=secret&view=full")
+        self.assertIn("token=%5BREDACTED%5D", safe)
+        self.assertIn("view=full", safe)
+        self.assertNotIn("secret", safe)
+
+    def test_ffuf_summary_keeps_metadata_not_response_bodies(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "ffuf.json"
+            path.write_text(json.dumps({"results": [{
+                "url": "https://example.com/admin", "status": 403,
+                "length": 120, "words": 10, "lines": 4,
+                "response": "must not be copied",
+            }]}), encoding="utf-8")
+            rows = _ffuf_results(path)
+            self.assertEqual(rows[0]["status"], 403)
+            self.assertNotIn("response", rows[0])
 
     def test_duration_is_bounded(self):
         with tempfile.TemporaryDirectory() as folder:
