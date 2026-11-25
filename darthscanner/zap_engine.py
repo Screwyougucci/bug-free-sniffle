@@ -314,7 +314,7 @@ class ZapEngine:
         spider = self._api(
             "spider", "action", "scan", url=target,
             contextName=context_name, recurse="true", subtreeOnly="true",
-            maxChildren="1000",
+            maxChildren="500",
         )
         spider_id = str(spider.get("scan") or "0")
         self._wait("spider", "status", spider_id, stop_event=stop_event,
