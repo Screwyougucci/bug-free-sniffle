@@ -153,6 +153,24 @@ class DarthScannerApp:
                                      relief="flat", padx=17, pady=8, font=("Segoe UI", 9, "bold"))
         self.fuzz_button.pack(side="left", padx=3)
 
+        engine_row = tk.Frame(target_panel, bg="#151d2a")
+        engine_row.pack(fill="x", pady=(8, 2))
+        self.zap_button = tk.Button(engine_row, text="OWASP ZAP ENGINE", command=self.start_zap_scan,
+                                    bg="#9b2438", fg="white", activebackground="#bd334b",
+                                    relief="flat", padx=17, pady=8, font=("Segoe UI", 9, "bold"))
+        self.zap_button.pack(side="left", padx=(0, 8))
+        tk.Button(engine_row, text="GET ZAP", command=self.open_zap_download,
+                  bg="#253247", fg="white", relief="flat", padx=12, pady=8,
+                  font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 12))
+        self.zap_active_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(
+            engine_row,
+            text="Enable active scan (sends test requests; separate confirmation)",
+            variable=self.zap_active_var, bg="#151d2a", fg="#d7d9e0",
+            activebackground="#151d2a", activeforeground="white", selectcolor="#202a3a",
+            font=("Segoe UI", 9),
+        ).pack(side="left")
+
         github_row = tk.Frame(target_panel, bg="#151d2a")
         github_row.pack(fill="x", pady=(8, 2))
         tk.Label(github_row, text="GITHUB REPOSITORY", bg="#151d2a", fg="#aebbd0",
@@ -290,6 +308,7 @@ class DarthScannerApp:
                               fg="#e4a0a8" if running else "#a8adb9")
         self.start_button.configure(state="disabled" if running else "normal")
         self.deep_scan_button.configure(state="disabled" if running else "normal")
+        self.zap_button.configure(state="disabled" if running else "normal")
         self.stop_button.configure(state="normal" if running else "disabled")
         self.fuzz_button.configure(state="disabled" if running else "normal")
         self.github_audit_button.configure(state="disabled" if running else "normal")
@@ -371,7 +390,7 @@ class DarthScannerApp:
             findings, summary = audit_github_repository(repository, stop_event=self.stop_event)
             payload = {
                 "tool": APP_NAME,
-                "version": "0.23.0",
+                "version": "0.25.0",
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "repository": summary,
                 "finding_count": len(findings),
@@ -611,6 +630,102 @@ class DarthScannerApp:
                 self.events.put(("exit", f"Full crawl and analysis finished (status {code})."))
         except Exception as exc:
             self.events.put(("exit", f"Deep scan error: {exc}"))
+
+    def open_zap_download(self):
+        """Open the official OWASP ZAP download page."""
+        webbrowser.open("https://www.zaproxy.org/download/")
+
+    def start_zap_scan(self):
+        """Run the real OWASP ZAP crawler and scanner as a managed local engine."""
+        if self.worker is not None and self.worker.is_alive():
+            messagebox.showinfo("OWASP ZAP", "Stop the current run before starting a ZAP scan.")
+            return
+        if not self.authorized_var.get():
+            messagebox.showwarning(
+                "Authorization required",
+                "Confirm that you own this website or have explicit permission before scanning.",
+            )
+            return
+        try:
+            target, _host = parse_target_url(self.url_var.get())
+        except ValueError as exc:
+            messagebox.showerror("Invalid website", str(exc))
+            return
+
+        active_scan = bool(self.zap_active_var.get())
+        summary = (
+            f"Run OWASP ZAP's traditional spider, browser-based Client Spider when available, "
+            f"and passive vulnerability rules against:\\n\\n{target}\\n\\n"
+            "The ZAP API will listen only on this computer. Crawl scope is restricted to the exact hostname."
+        )
+        if not messagebox.askyesno("Confirm OWASP ZAP scan", summary):
+            return
+        if active_scan and not messagebox.askyesno(
+            "Confirm active security testing",
+            "ACTIVE SCANNING IS ENABLED. ZAP will send test requests designed to identify vulnerabilities. "
+            "This can change application state, trigger alerts, or affect fragile services. "
+            "Use only a system you own or are explicitly authorized to test, preferably staging. Continue?",
+        ):
+            return
+
+        folder = app_data_dir() / (target_id(target) + "-" + resource_id(target))
+        output_dir = folder / "zap-engine"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        self.current_target = target
+        self.current_folder = output_dir
+        self.url_var.set(target)
+        self._clear_dashboard()
+        self.refresh_dashboard()
+        self.stop_event.clear()
+        self._set_running(True)
+        self._log(f"Starting OWASP ZAP engine for {target}")
+        self._log("Passive spidering and passive rules are enabled; active scanning: " +
+                  ("ENABLED after separate confirmation." if active_scan else "OFF."))
+        self._log(f"ZAP report folder: {output_dir}")
+        self.worker = threading.Thread(
+            target=self._run_zap_scan_process,
+            args=(target, output_dir, active_scan),
+            daemon=True,
+        )
+        self.worker.start()
+
+    def _run_zap_scan_process(self, target: str, output_dir: Path, active_scan: bool):
+        """Run ZAP, normalize its alerts, and merge them into Darth's history."""
+        try:
+            from .zap_engine import run_zap_scan
+            payload = run_zap_scan(
+                target,
+                active_scan=active_scan,
+                stop_event=self.stop_event,
+                progress=lambda message: self.events.put(("log", message)),
+            )
+            payload["tool"] = APP_NAME
+            payload["version"] = "0.25.0"
+            payload["generated_at"] = datetime.now(timezone.utc).isoformat()
+            report_path = output_dir / "latest-report.json"
+            report_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+            history_path = output_dir / "history.json"
+            history = _load_history(history_path)
+            lifecycle = update_full_scan_history(
+                history, target, payload.get("findings", []), str(report_path)
+            )
+            _save_history(history_path, history)
+            self.events.put((
+                "log",
+                f"OWASP ZAP finished: engine {payload.get('engine_version', 'unknown')}; "
+                f"{payload.get('discovered_url_count', 0)} URLs; "
+                f"{payload.get('alert_count', 0)} alert(s).",
+            ))
+            self.events.put((
+                "log",
+                f"Darth history updated: {len(payload.get('findings', []))} findings; "
+                f"{len(lifecycle['new'])} new, {len(lifecycle['changed'])} changed, "
+                f"{len(lifecycle['recurring'])} recurring.",
+            ))
+            self.events.put(("log", f"ZAP evidence report: {report_path}"))
+            self.events.put(("exit", "OWASP ZAP scan stopped." if self.stop_event.is_set() else "OWASP ZAP scan complete."))
+        except Exception as exc:
+            self.events.put(("exit", f"OWASP ZAP engine error: {exc}"))
 
     def show_fuzz_lab(self):
         """Open the bounded HTTP parameter fuzzing workspace."""
