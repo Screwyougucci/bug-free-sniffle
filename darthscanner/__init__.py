@@ -1,3 +1,3 @@
-"Darth Scanner: scoped, non-destructive security scanner and local source review tool; no AI components."
+"""Darth Scanner: scoped, non-destructive security scanner and local source review tool."""
 
-__version__ = "0.25.0"
+__version__ = "0.26.0"
