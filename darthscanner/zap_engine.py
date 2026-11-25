@@ -301,6 +301,14 @@ class ZapEngine:
         self._api("context", "action", "includeInContext", contextName=context_name, regex=exact_origin)
         self._api("context", "action", "setContextInScope", contextName=context_name, booleanInScope="true")
 
+        # Bound the engine itself as well as the orchestration timeout. These
+        # settings avoid unlimited-depth crawls and obvious logout routes.
+        self._api("spider", "action", "setOptionMaxDuration", Integer="15")
+        self._api("spider", "action", "setOptionMaxDepth", Integer="8")
+        self._api("spider", "action", "setOptionMaxChildren", Integer="500")
+        self._api("spider", "action", "setOptionMaxParseSizeBytes", Integer="2097152")
+        self._api("spider", "action", "setOptionLogoutAvoidance", Boolean="true")
+
         if progress:
             progress("OWASP ZAP traditional spider starting")
         spider = self._api(
