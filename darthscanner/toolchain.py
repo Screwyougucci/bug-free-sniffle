@@ -169,6 +169,45 @@ def _install_release_binary(name: str, repo: str, executable: str, prefix: str,
     }
 
 
+
+def _winget_install(package_id: str, progress) -> bool:
+    winget = shutil.which("winget")
+    if not winget:
+        progress(f"WinGet is unavailable; skipped prerequisite {package_id}.")
+        return False
+    command = [winget, "install", "--id", package_id, "--exact", "--silent",
+               "--accept-package-agreements", "--accept-source-agreements"]
+    progress(f"WinGet: installing {package_id} (Windows may request approval)…")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
+    try:
+        result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, encoding="utf-8",
+                                errors="replace", timeout=1200, creationflags=flags)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        progress(f"WinGet could not install {package_id}: {exc}")
+        return False
+    for line in (result.stdout or "").splitlines()[-12:]:
+        progress(line[:500])
+    if result.returncode != 0:
+        progress(f"WinGet installation failed for {package_id} (exit {result.returncode}).")
+        return False
+    progress(f"WinGet installed or updated {package_id}.")
+    return True
+
+
+def _java_17_available() -> bool:
+    java = shutil.which("java")
+    if not java:
+        return False
+    try:
+        result = subprocess.run([java, "-version"], stdout=subprocess.PIPE,
+                                stderr=subprocess.STDOUT, text=True, timeout=8)
+        match = re.search(r'version "?(?:1\\.)?(\\d+)', result.stdout or "", re.IGNORECASE)
+        return bool(match and int(match.group(1)) >= 17)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def install_toolchain(progress=lambda message: None, stop_event=None) -> dict:
     """Install/update ffuf and ProjectDiscovery binaries into app-local storage."""
     if os.name != "nt" or os.environ.get("PROCESSOR_ARCHITECTURE", "").lower() not in {"amd64", "x86_64"}:
@@ -181,6 +220,11 @@ def install_toolchain(progress=lambda message: None, stop_event=None) -> dict:
         installed[name] = _install_release_binary(
             name, repo, executable + ".exe", prefix, binary_dir, progress
         )
+    if not _java_17_available():
+        _winget_install("EclipseAdoptium.Temurin.17.JRE", progress)
+    from .zap_engine import find_zap_launcher
+    if find_zap_launcher() is None:
+        _winget_install("ZAP.ZAP", progress)
     manifest_path = tool_root() / "installed-tools.json"
     manifest_path.write_text(json.dumps({
         "schema_version": 1, "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -196,6 +240,12 @@ def tool_status() -> dict:
     for name in TOOL_SPECS:
         path = binary_dir / f"{name}.exe"
         status[name] = {"installed": path.is_file(), "path": str(path) if path.is_file() else None}
+    try:
+        from .zap_engine import find_zap_launcher
+        launcher = find_zap_launcher()
+    except Exception:
+        launcher = None
+    status["zap"] = {"installed": launcher is not None, "path": str(launcher) if launcher else None}
     return status
 
 
@@ -287,7 +337,8 @@ def _read_jsonl(path: Path, limit: int = 10000) -> list[dict]:
 
 def run_toolchain_watch(target: str, output_dir: Path, *, duration_hours: int = 1,
                         include_subdomains: bool = False, run_nuclei: bool = False,
-                        stop_event=None, progress=lambda message: None,
+                        run_zap: bool = False, stop_event=None,
+                        progress=lambda message: None,
                         cycle_interval_seconds: int = 1800) -> dict:
     """Run checkpointed, rate-limited assessment cycles until duration or Stop.
 
@@ -383,6 +434,19 @@ def run_toolchain_watch(target: str, output_dir: Path, *, duration_hours: int = 
                               "-c", "2", "-timeout", "10", "-retries", "0",
                               "-jsonl", "-o", str(nuclei_out)],
                              stop_event=stop_event, progress=progress, timeout=900)
+        if run_zap and (stop_event is None or not stop_event.is_set()):
+            try:
+                from .zap_engine import find_zap_launcher, run_zap_scan
+                if find_zap_launcher() is None:
+                    progress("OWASP ZAP is not installed; passive ZAP step skipped.")
+                else:
+                    progress("Running OWASP ZAP passive spider (active scan disabled).")
+                    zap_payload = run_zap_scan(target, active_scan=False, stop_event=stop_event, progress=progress)
+                    (cycle_dir / "zap-passive.json").write_text(
+                        json.dumps(zap_payload, indent=2, ensure_ascii=False), encoding="utf-8"
+                    )
+            except Exception as exc:
+                progress(f"OWASP ZAP step failed; other tools continue: {exc}")
         state["last_completed_cycle"] = cycle
         state["last_cycle_at"] = datetime.now(timezone.utc).isoformat()
         state["status"] = "paused" if stop_event is not None and stop_event.is_set() else "running"
