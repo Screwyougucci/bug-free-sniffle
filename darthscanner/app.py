@@ -685,7 +685,7 @@ class DarthScannerApp:
         except ValueError as exc:
             messagebox.showerror("Invalid website", str(exc))
             return
-        missing = [name for name, item in tool_status().items() if not item["installed"]]
+        missing = [name for name, item in tool_status().items() if name != "zap" and not item["installed"]]
         if missing:
             if messagebox.askyesno("Tools are missing",
                 "Missing tools: " + ", ".join(missing) + "\n\nInstall/update them now?"):
@@ -725,6 +725,7 @@ class DarthScannerApp:
             "Katana crawls to depth 3 with a 2 request/second limit. Subfinder is passive. "
             "The assessment repeats in 30-minute cycles, writes a checkpoint after each cycle, and can resume after Stop/relaunch. "
             "Nuclei is off by default; enabling it runs the selected template tags at a low rate. "
+            "The optional ZAP stage is passive-only; its browser spider may execute page JavaScript and interact with controls. "
             "No credential attacks, uploads, or denial-of-service tests are run."
         ), bg="#151d2a", fg="#9eabc0", font=("Segoe UI", 8), wraplength=640,
             justify="left").pack(anchor="w", pady=(12, 14))
@@ -736,6 +737,9 @@ class DarthScannerApp:
                     raise ValueError("Duration must be 1–24 hours.")
             except (ValueError, TypeError) as exc:
                 messagebox.showerror("Invalid duration", str(exc))
+                return
+            if zap_var.get() and not tool_status().get("zap", {}).get("installed"):
+                messagebox.showerror("OWASP ZAP is missing", "Click INSTALL / UPDATE TOOLS first, or install OWASP ZAP and Java 17+ separately.")
                 return
             if not messagebox.askyesno(
                 "Confirm authorized toolchain scan",
