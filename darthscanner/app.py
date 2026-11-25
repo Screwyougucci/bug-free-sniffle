@@ -309,6 +309,10 @@ class DarthScannerApp:
     def _log(self, message: str):
         self.log.configure(state="normal")
         self.log.insert("end", message.rstrip() + "\n")
+        # Long-running tool output must not grow the in-memory Tk text widget forever.
+        line_count = int(self.log.index("end-1c").split(".")[0])
+        if line_count > 2500:
+            self.log.delete("1.0", f"{line_count - 2000}.0")
         self.log.see("end")
         self.log.configure(state="disabled")
 
