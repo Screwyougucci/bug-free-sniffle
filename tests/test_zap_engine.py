@@ -121,7 +121,7 @@ class ZapEngineTests(unittest.TestCase):
         self.assertEqual(result["out_of_scope_alerts_excluded"], 1)
         self.assertEqual(len(result["findings"]), 1)
         include_call = next(item for item in calls if item[:3] == ("context", "action", "includeInContext"))
-        self.assertEqual(include_call[3]["regex"], r"^https://owned\\.example/.*$")
+        self.assertEqual(include_call[3]["regex"], r"^https://owned\.example/.*$")
 
     def test_launcher_can_be_configured_by_environment(self):
         with tempfile.TemporaryDirectory() as folder:
