@@ -367,22 +367,24 @@ def _ffuf_results(path: Path) -> list[dict]:
     return rows
 
 
-def _katana_urls(path: Path) -> list[str]:
+def _katana_urls(path: Path, root_url: str, include_subdomains: bool) -> list[str]:
     urls = []
     for item in _read_jsonl(path, 2000):
         request = item.get("request") if isinstance(item.get("request"), dict) else {}
         candidate = item.get("url") or item.get("endpoint") or request.get("endpoint") or ""
         safe = _safe_url(candidate)
-        if safe:
+        if safe and _is_in_scope(root_url, safe, include_subdomains):
             urls.append(safe)
     return list(dict.fromkeys(urls))
 
 
-def _nuclei_findings(path: Path) -> list[dict]:
+def _nuclei_findings(path: Path, root_url: str, include_subdomains: bool) -> list[dict]:
     rows = []
     for item in _read_jsonl(path, 2000):
         info = item.get("info") if isinstance(item.get("info"), dict) else {}
         matched = _safe_url(item.get("matched-at") or item.get("matched") or "")
+        if not matched or not _is_in_scope(root_url, matched, include_subdomains):
+            continue
         rows.append({
             "template_id": item.get("template-id"),
             "name": info.get("name"),
@@ -475,7 +477,7 @@ def run_toolchain_watch(target: str, output_dir: Path, *, duration_hours: int = 
             safe_name = re.sub(r"[^a-zA-Z0-9.-]", "_", urlsplit(base_url).netloc)
             katana_out = cycle_dir / f"katana-{safe_name}.jsonl"
             tool_exit_codes["katana-" + safe_name] = _run_command([str(binary_dir / "katana.exe"), "-u", base_url, "-d", "3",
-                          "-c", "2", "-rl", "2", "-timeout", "10", "-jc",
+                          "-c", "2", "-rl", "2", "-timeout", "10", "-jc", "-fs", "fqdn",
                           "-jsonl", "-silent", "-o", str(katana_out)],
                          stop_event=stop_event, progress=progress, timeout=600)[0]
             ffuf_out = cycle_dir / f"ffuf-{safe_name}.json"
@@ -512,9 +514,9 @@ def run_toolchain_watch(target: str, output_dir: Path, *, duration_hours: int = 
         for result_file in cycle_dir.glob("ffuf-*.json"):
             ffuf_findings.extend(_ffuf_results(result_file))
         for result_file in cycle_dir.glob("katana-*.jsonl"):
-            katana_endpoints.extend(_katana_urls(result_file))
+            katana_endpoints.extend(_katana_urls(result_file, target, include_subdomains))
         for result_file in cycle_dir.glob("nuclei-*.jsonl"):
-            nuclei_findings.extend(_nuclei_findings(result_file))
+            nuclei_findings.extend(_nuclei_findings(result_file, target, include_subdomains))
         subdomains = []
         sub_path = cycle_dir / "subdomains.txt"
         if sub_path.is_file():
