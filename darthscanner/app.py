@@ -29,6 +29,7 @@ from .github_audit import audit_github_repository, discover_github_repositories
 from .exploitability import analyze_exploitability
 from .fuzz_reports import build_fuzz_finding_reports
 from .fuzz_correlation import correlate_fuzz_observations
+from .toolchain import install_toolchain, run_toolchain_watch, tool_status
 
 
 APP_NAME = "Darth Scanner"
@@ -162,6 +163,14 @@ class DarthScannerApp:
         tk.Button(engine_row, text="GET ZAP", command=self.open_zap_download,
                   bg="#253247", fg="white", relief="flat", padx=12, pady=8,
                   font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 12))
+        self.tool_install_button = tk.Button(engine_row, text="INSTALL / UPDATE TOOLS", command=self.install_tools,
+                                             bg="#253247", fg="white", relief="flat", padx=13, pady=8,
+                                             font=("Segoe UI", 9, "bold"))
+        self.tool_install_button.pack(side="left", padx=(0, 8))
+        self.toolchain_button = tk.Button(engine_row, text="FULL TOOLCHAIN", command=self.start_toolchain_scan,
+                                          bg="#9b2438", fg="white", relief="flat", padx=13, pady=8,
+                                          font=("Segoe UI", 9, "bold"))
+        self.toolchain_button.pack(side="left", padx=(0, 12))
         self.zap_active_var = tk.BooleanVar(value=False)
         tk.Checkbutton(
             engine_row,
@@ -300,6 +309,10 @@ class DarthScannerApp:
     def _log(self, message: str):
         self.log.configure(state="normal")
         self.log.insert("end", message.rstrip() + "\n")
+        # Long-running tool output must not grow the in-memory Tk text widget forever.
+        line_count = int(self.log.index("end-1c").split(".")[0])
+        if line_count > 2500:
+            self.log.delete("1.0", f"{line_count - 2000}.0")
         self.log.see("end")
         self.log.configure(state="disabled")
 
@@ -309,6 +322,8 @@ class DarthScannerApp:
         self.start_button.configure(state="disabled" if running else "normal")
         self.deep_scan_button.configure(state="disabled" if running else "normal")
         self.zap_button.configure(state="disabled" if running else "normal")
+        self.tool_install_button.configure(state="disabled" if running else "normal")
+        self.toolchain_button.configure(state="disabled" if running else "normal")
         self.stop_button.configure(state="normal" if running else "disabled")
         self.fuzz_button.configure(state="disabled" if running else "normal")
         self.github_audit_button.configure(state="disabled" if running else "normal")
@@ -390,7 +405,7 @@ class DarthScannerApp:
             findings, summary = audit_github_repository(repository, stop_event=self.stop_event)
             payload = {
                 "tool": APP_NAME,
-                "version": "0.25.0",
+                "version": "0.26.0",
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "repository": summary,
                 "finding_count": len(findings),
@@ -586,7 +601,7 @@ class DarthScannerApp:
                         github_dir = output_dir.parent / "github-source-audit"
                         github_dir.mkdir(parents=True, exist_ok=True)
                         github_report = {
-                            "tool": APP_NAME, "version": "0.23.0",
+                            "tool": APP_NAME, "version": "0.26.0",
                             "generated_at": datetime.now(timezone.utc).isoformat(),
                             "repository": github_summary, "finding_count": len(github_findings),
                             "findings": [item.to_dict() for item in github_findings],
@@ -630,6 +645,154 @@ class DarthScannerApp:
                 self.events.put(("exit", f"Full crawl and analysis finished (status {code})."))
         except Exception as exc:
             self.events.put(("exit", f"Deep scan error: {exc}"))
+
+    def install_tools(self):
+        """Download verified official Windows releases into app-local storage."""
+        if self.worker is not None and self.worker.is_alive():
+            return
+        if not messagebox.askyesno(
+            "Install / update security tools",
+            "Download the latest official Windows x64 releases of ffuf, Subfinder, httpx, Katana, and Nuclei?\n\n"
+            "Archives are downloaded from official GitHub releases and SHA-256 checked against each publisher's checksum manifest. "
+            "The installer also offers Temurin Java 17 and OWASP ZAP through WinGet if they are missing. "
+            "Executables stay inside Darth Scanner's local app-data folder. No tools are run during installation."
+        ):
+            return
+        self.stop_event.clear()
+        self._set_running(True)
+        self._log("Installing/updating official security tools…")
+        self.worker = threading.Thread(target=self._run_tool_install, daemon=True)
+        self.worker.start()
+
+    def _run_tool_install(self):
+        try:
+            installed = install_toolchain(
+                progress=lambda message: self.events.put(("log", message)),
+                stop_event=self.stop_event,
+            )
+            self.events.put(("log", "Installed tools: " + ", ".join(sorted(installed))))
+            self.events.put(("exit", "Security tools installed/updated."))
+        except Exception as exc:
+            self.events.put(("exit", f"Tool installation error: {exc}"))
+
+    def start_toolchain_scan(self):
+        """Configure a long-running, checkpointed third-party tool assessment."""
+        if self.worker is not None and self.worker.is_alive():
+            messagebox.showinfo("Toolchain", "Stop the current run before starting the toolchain.")
+            return
+        if not self.authorized_var.get():
+            messagebox.showwarning("Authorization required",
+                "Confirm that you own this website or have explicit permission before scanning.")
+            return
+        try:
+            target, host = parse_target_url(self.url_var.get())
+        except ValueError as exc:
+            messagebox.showerror("Invalid website", str(exc))
+            return
+        missing = [name for name, item in tool_status().items() if name != "zap" and not item["installed"]]
+        if missing:
+            if messagebox.askyesno("Tools are missing",
+                "Missing tools: " + ", ".join(missing) + "\n\nInstall/update them now?"):
+                self.install_tools()
+            return
+
+        window = tk.Toplevel(self.root)
+        window.title("Full toolchain assessment | Darth Scanner")
+        window.geometry("700x420")
+        window.configure(bg="#0b0e14")
+        panel = tk.Frame(window, bg="#151d2a", padx=20, pady=18)
+        panel.pack(fill="both", expand=True, padx=16, pady=16)
+        tk.Label(panel, text="MULTI-ENGINE ASSESSMENT", bg="#151d2a", fg="#f3f6fb",
+                 font=("Segoe UI", 14, "bold")).pack(anchor="w")
+        tk.Label(panel, text="ffuf + Subfinder + httpx + Katana + optional Nuclei",
+                 bg="#151d2a", fg="#9eabc0", font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 14))
+        controls = tk.Frame(panel, bg="#151d2a")
+        controls.pack(anchor="w")
+        tk.Label(controls, text="Run duration (hours)", bg="#151d2a", fg="#d7d9e0").pack(side="left")
+        duration_var = tk.IntVar(value=2)
+        tk.Spinbox(controls, from_=1, to=24, width=5, textvariable=duration_var,
+                   bg="#202a3a", fg="#f7f9fc", insertbackground="white", relief="flat").pack(side="left", padx=(8, 18))
+        nuclei_var = tk.BooleanVar(value=False)
+        zap_var = tk.BooleanVar(value=False)
+        tk.Checkbutton(panel, text="Enable Nuclei checks (misconfiguration/exposure/SSL tags only; sends test requests)",
+                       variable=nuclei_var, bg="#151d2a", fg="#d7d9e0", activebackground="#151d2a",
+                       activeforeground="white", selectcolor="#202a3a", font=("Segoe UI", 9)).pack(anchor="w", pady=(14, 4))
+        tk.Checkbutton(panel, text="Include OWASP ZAP passive spider (browser-based crawling can interact with page controls)",
+                       variable=zap_var, bg="#151d2a", fg="#d7d9e0", activebackground="#151d2a",
+                       activeforeground="white", selectcolor="#202a3a", font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 4))
+        subdomain_note = ("Subdomain discovery and bounded checks are enabled for the root domain and its discovered subdomains."
+                          if self.include_subdomains_var.get() else
+                          "Subdomain discovery is off; active tools stay on the exact target hostname.")
+        tk.Label(panel, text=(
+            f"Target: {target}\n\n{subdomain_note}\n\n"
+            "ffuf performs GET-only path discovery using a small benign wordlist, capped at 2 requests/second and 3 minutes per host. "
+            "Katana crawls to depth 3 with a 2 request/second limit. Subfinder is passive. "
+            "The assessment repeats in 30-minute cycles, writes a checkpoint after each cycle, and can resume after Stop/relaunch. "
+            "Nuclei is off by default; enabling it runs the selected template tags at a low rate. "
+            "The optional ZAP stage is passive-only; its browser spider may execute page JavaScript and interact with controls. "
+            "No credential attacks, uploads, or denial-of-service tests are run."
+        ), bg="#151d2a", fg="#9eabc0", font=("Segoe UI", 8), wraplength=640,
+            justify="left").pack(anchor="w", pady=(12, 14))
+
+        def begin():
+            try:
+                duration = int(duration_var.get())
+                if not 1 <= duration <= 24:
+                    raise ValueError("Duration must be 1–24 hours.")
+            except (ValueError, TypeError) as exc:
+                messagebox.showerror("Invalid duration", str(exc))
+                return
+            if zap_var.get() and not tool_status().get("zap", {}).get("installed"):
+                messagebox.showerror("OWASP ZAP is missing", "Click INSTALL / UPDATE TOOLS first, or install OWASP ZAP and Java 17+ separately.")
+                return
+            if not messagebox.askyesno(
+                "Confirm authorized toolchain scan",
+                f"Run the multi-tool assessment against {target} for up to {duration} hour(s)?\n\n"
+                + ("This includes discovered subdomains. Confirm authorization for the root domain and all subdomains.\n\n"
+                   if self.include_subdomains_var.get() else "")
+                + ("Nuclei checks are ENABLED and send vulnerability test requests.\n\n" if nuclei_var.get() else "")
+                + ("OWASP ZAP passive spider is ENABLED; its browser spider may interact with page controls.\n\n" if zap_var.get() else "")
+                + "All tools are rate-limited. Results and checkpoints remain on this PC."
+            ):
+                return
+            folder = app_data_dir() / (target_id(target) + "-" + resource_id(target))
+            output_dir = folder / "toolchain"
+            output_dir.mkdir(parents=True, exist_ok=True)
+            self.current_target = target
+            self.current_folder = folder / "reports"
+            self.url_var.set(target)
+            self._clear_dashboard()
+            self.refresh_dashboard()
+            self.stop_event.clear()
+            self._set_running(True)
+            self._log(f"Starting multi-tool assessment: {target}; duration {duration} hour(s).")
+            self._log(f"Toolchain reports/checkpoint: {output_dir}")
+            self.worker = threading.Thread(
+                target=self._run_toolchain_process,
+                args=(target, output_dir, duration, bool(self.include_subdomains_var.get()), bool(nuclei_var.get()), bool(zap_var.get())),
+                daemon=True,
+            )
+            self.worker.start()
+            window.destroy()
+
+        tk.Button(panel, text="START FULL TOOLCHAIN", command=begin, bg="#c0263d", fg="white",
+                  activebackground="#e03b55", relief="flat", padx=18, pady=9,
+                  font=("Segoe UI", 9, "bold")).pack(anchor="e")
+
+    def _run_toolchain_process(self, target: str, output_dir: Path, duration: int,
+                               include_subdomains: bool, run_nuclei: bool, run_zap: bool):
+        try:
+            state = run_toolchain_watch(
+                target, output_dir, duration_hours=duration,
+                include_subdomains=include_subdomains, run_nuclei=run_nuclei, run_zap=run_zap,
+                stop_event=self.stop_event,
+                progress=lambda message: self.events.put(("log", message)),
+            )
+            self.events.put(("log", f"Toolchain status: {state.get('status')}; completed cycles: {state.get('last_completed_cycle', 0)}."))
+            self.events.put(("log", f"Toolchain checkpoint: {output_dir / 'scan-state.json'}"))
+            self.events.put(("exit", "Toolchain assessment stopped and checkpointed." if state.get("status") == "paused" else "Toolchain assessment duration completed."))
+        except Exception as exc:
+            self.events.put(("exit", f"Toolchain assessment error: {exc}"))
 
     def open_zap_download(self):
         """Open the official OWASP ZAP download page."""
@@ -700,7 +863,7 @@ class DarthScannerApp:
                 progress=lambda message: self.events.put(("log", message)),
             )
             payload["tool"] = APP_NAME
-            payload["version"] = "0.25.0"
+            payload["version"] = "0.26.0"
             payload["generated_at"] = datetime.now(timezone.utc).isoformat()
             report_path = output_dir / "latest-report.json"
             report_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -847,7 +1010,7 @@ class DarthScannerApp:
                 (correlation_dir / "index.json").write_text(json.dumps({"tool": APP_NAME, "correlation_count": len(correlations), "correlations": correlations, "note": "Correlated hypotheses only; no exploit is confirmed and no CVSS is assigned."}, indent=2), encoding="utf-8")
                 payload = {
                     "tool": APP_NAME,
-                    "version": "0.21.0",
+                    "version": "0.26.0",
                     "generated_at": datetime.now(timezone.utc).isoformat(),
                     "target": sanitize_url(url),
                     "requests_made": client.requests_made,
@@ -898,7 +1061,7 @@ class DarthScannerApp:
                         github_dir = output_dir.parent / "github-source-audit"
                         github_dir.mkdir(parents=True, exist_ok=True)
                         github_report = {
-                            "tool": APP_NAME, "version": "0.23.0",
+                            "tool": APP_NAME, "version": "0.26.0",
                             "generated_at": datetime.now(timezone.utc).isoformat(),
                             "repository": github_summary, "finding_count": len(github_findings),
                             "findings": [item.to_dict() for item in github_findings],
