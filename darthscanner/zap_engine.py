@@ -106,7 +106,7 @@ def _free_loopback_port() -> int:
 def _redact(value: object, limit: int = 1800) -> str:
     text = str(value or "")
     text = re.sub(
-        r"(?i)(password|passwd|token|secret|api[_-]?key|authorization|cookie)([s:=]+)([^\s,;<>\"']+)",
+        r"(?i)(password|passwd|token|secret|api[_-]?key|authorization|cookie)([\s:=]+)([^\s,;<>\"']+)",
         r"\1\2[REDACTED]", text,
     )
     text = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/-]+=*", r"\1[REDACTED]", text)
