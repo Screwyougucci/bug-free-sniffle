@@ -22,7 +22,7 @@ from urllib.error import URLError
 from urllib.request import Request, urlopen
 import zipfile
 from io import BytesIO
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 TOOL_SPECS = {
@@ -335,6 +335,63 @@ def _read_jsonl(path: Path, limit: int = 10000) -> list[dict]:
     return rows
 
 
+
+
+def _safe_url(value: str) -> str:
+    try:
+        parts = urlsplit(str(value))
+        if parts.scheme not in {"http", "https"} or not parts.hostname:
+            return ""
+        secret = re.compile(r"(?i)(token|secret|password|passwd|api[_-]?key|auth|session|cookie|jwt)")
+        query = [(key, "[REDACTED]" if secret.search(key) else item)
+                 for key, item in parse_qsl(parts.query, keep_blank_values=True)]
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), ""))
+    except ValueError:
+        return ""
+
+
+def _ffuf_results(path: Path) -> list[dict]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    rows = []
+    for item in payload.get("results", [])[:500]:
+        url = _safe_url(item.get("url", ""))
+        if url:
+            rows.append({
+                "url": url, "status": item.get("status"),
+                "response_bytes": item.get("length"), "words": item.get("words"),
+                "lines": item.get("lines"),
+            })
+    return rows
+
+
+def _katana_urls(path: Path) -> list[str]:
+    urls = []
+    for item in _read_jsonl(path, 2000):
+        request = item.get("request") if isinstance(item.get("request"), dict) else {}
+        candidate = item.get("url") or item.get("endpoint") or request.get("endpoint") or ""
+        safe = _safe_url(candidate)
+        if safe:
+            urls.append(safe)
+    return list(dict.fromkeys(urls))
+
+
+def _nuclei_findings(path: Path) -> list[dict]:
+    rows = []
+    for item in _read_jsonl(path, 2000):
+        info = item.get("info") if isinstance(item.get("info"), dict) else {}
+        matched = _safe_url(item.get("matched-at") or item.get("matched") or "")
+        rows.append({
+            "template_id": item.get("template-id"),
+            "name": info.get("name"),
+            "severity": info.get("severity"),
+            "matched_url": matched,
+            "type": item.get("type"),
+        })
+    return rows
+
 def run_toolchain_watch(target: str, output_dir: Path, *, duration_hours: int = 1,
                         include_subdomains: bool = False, run_nuclei: bool = False,
                         run_zap: bool = False, stop_event=None,
@@ -385,22 +442,23 @@ def run_toolchain_watch(target: str, output_dir: Path, *, duration_hours: int = 
         cycle_dir = output_dir / f"cycle-{cycle:04d}"
         cycle_dir.mkdir(parents=True, exist_ok=True)
         progress(f"=== TOOLCHAIN CYCLE {cycle} ===")
+        tool_exit_codes = {}
         host_file = cycle_dir / "hosts.txt"
         hosts = [root_host]
         if include_subdomains:
             subfinder = binary_dir / "subfinder.exe"
             sub_path = cycle_dir / "subdomains.txt"
-            _run_command([str(subfinder), "-d", root_host, "-silent", "-o", str(sub_path), "-max-time", "5"],
-                         stop_event=stop_event, progress=progress, timeout=420)
+            tool_exit_codes["subfinder"] = _run_command([str(subfinder), "-d", root_host, "-silent", "-o", str(sub_path), "-max-time", "5"],
+                         stop_event=stop_event, progress=progress, timeout=420)[0]
             if sub_path.is_file():
                 discovered = [line.strip().lower() for line in sub_path.read_text(encoding="utf-8", errors="replace").splitlines()]
                 hosts.extend(item for item in discovered if item and (item == root_host or item.endswith("." + root_host)))
             hosts = list(dict.fromkeys(hosts))[:25]
         host_file.write_text("\n".join(hosts) + "\n", encoding="utf-8")
         httpx_out = cycle_dir / "live-hosts.jsonl"
-        _run_command([str(binary_dir / "httpx.exe"), "-l", str(host_file), "-silent", "-json",
+        tool_exit_codes["httpx"] = _run_command([str(binary_dir / "httpx.exe"), "-l", str(host_file), "-silent", "-json",
                       "-rate-limit", "2", "-threads", "2", "-timeout", "10", "-retries", "0",
-                      "-o", str(httpx_out)], stop_event=stop_event, progress=progress, timeout=600)
+                      "-o", str(httpx_out)], stop_event=stop_event, progress=progress, timeout=600)[0]
         live = []
         for item in _read_jsonl(httpx_out, 100):
             candidate = str(item.get("url") or item.get("input") or "")
@@ -416,22 +474,22 @@ def run_toolchain_watch(target: str, output_dir: Path, *, duration_hours: int = 
                 continue
             safe_name = re.sub(r"[^a-zA-Z0-9.-]", "_", urlsplit(base_url).netloc)
             katana_out = cycle_dir / f"katana-{safe_name}.jsonl"
-            _run_command([str(binary_dir / "katana.exe"), "-u", base_url, "-d", "3",
+            tool_exit_codes["katana-" + safe_name] = _run_command([str(binary_dir / "katana.exe"), "-u", base_url, "-d", "3",
                           "-c", "2", "-rl", "2", "-timeout", "10", "-jc",
                           "-jsonl", "-silent", "-o", str(katana_out)],
-                         stop_event=stop_event, progress=progress, timeout=600)
+                         stop_event=stop_event, progress=progress, timeout=600)[0]
             ffuf_out = cycle_dir / f"ffuf-{safe_name}.json"
-            _run_command([str(binary_dir / "ffuf.exe"), "-u", base_url.rstrip("/") + "/FUZZ",
+            tool_exit_codes["ffuf-" + safe_name] = _run_command([str(binary_dir / "ffuf.exe"), "-u", base_url.rstrip("/") + "/FUZZ",
                           "-w", str(wordlist), "-rate", "2", "-t", "2",
                           "-maxtime", "180", "-noninteractive", "-of", "json", "-o", str(ffuf_out)],
-                         stop_event=stop_event, progress=progress, timeout=210)
+                         stop_event=stop_event, progress=progress, timeout=210)[0]
             if run_nuclei and (stop_event is None or not stop_event.is_set()):
                 nuclei_out = cycle_dir / f"nuclei-{safe_name}.jsonl"
-                _run_command([str(binary_dir / "nuclei.exe"), "-u", base_url,
+                tool_exit_codes["nuclei-" + safe_name] = _run_command([str(binary_dir / "nuclei.exe"), "-u", base_url,
                               "-tags", "misconfig,exposure,ssl",
                               "-exclude-tags", "dos,intrusive,fuzz,bruteforce,default-login",
                               "-severity", "info,low,medium", "-rate-limit", "2",
-                              "-c", "2", "-timeout", "10", "-retries", "0",
+                              "-c", "2", "-timeout", "10", "-retries", "0", "-omit-raw",
                               "-jsonl", "-o", str(nuclei_out)],
                              stop_event=stop_event, progress=progress, timeout=900)
         if run_zap and (stop_event is None or not stop_event.is_set()):
@@ -442,11 +500,54 @@ def run_toolchain_watch(target: str, output_dir: Path, *, duration_hours: int = 
                 else:
                     progress("Running OWASP ZAP passive spider (active scan disabled).")
                     zap_payload = run_zap_scan(target, active_scan=False, stop_event=stop_event, progress=progress)
+                    tool_exit_codes["zap"] = 0
                     (cycle_dir / "zap-passive.json").write_text(
                         json.dumps(zap_payload, indent=2, ensure_ascii=False), encoding="utf-8"
                     )
             except Exception as exc:
                 progress(f"OWASP ZAP step failed; other tools continue: {exc}")
+        ffuf_findings = []
+        katana_endpoints = []
+        nuclei_findings = []
+        for result_file in cycle_dir.glob("ffuf-*.json"):
+            ffuf_findings.extend(_ffuf_results(result_file))
+        for result_file in cycle_dir.glob("katana-*.jsonl"):
+            katana_endpoints.extend(_katana_urls(result_file))
+        for result_file in cycle_dir.glob("nuclei-*.jsonl"):
+            nuclei_findings.extend(_nuclei_findings(result_file))
+        subdomains = []
+        sub_path = cycle_dir / "subdomains.txt"
+        if sub_path.is_file():
+            subdomains = [line.strip() for line in sub_path.read_text(encoding="utf-8", errors="replace").splitlines()
+                          if line.strip() and (line.strip() == root_host or line.strip().endswith("." + root_host))]
+        zap_findings = []
+        zap_file = cycle_dir / "zap-passive.json"
+        if zap_file.is_file():
+            try:
+                zap_findings = json.loads(zap_file.read_text(encoding="utf-8")).get("findings", [])
+            except (OSError, ValueError):
+                zap_findings = []
+        report = {
+            "schema_version": 1, "target": target, "cycle": cycle,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "subdomains_discovered": subdomains,
+            "live_hosts": live,
+            "katana_endpoint_count": len(set(katana_endpoints)),
+            "katana_endpoints": list(dict.fromkeys(katana_endpoints))[:2000],
+            "ffuf_discovery_count": len(ffuf_findings),
+            "ffuf_discoveries": ffuf_findings[:2000],
+            "nuclei_candidate_count": len(nuclei_findings),
+            "nuclei_candidates": nuclei_findings[:2000],
+            "zap_candidate_count": len(zap_findings),
+            "zap_candidates": zap_findings[:1000],
+            "tool_exit_codes": tool_exit_codes,
+            "disclaimer": "Tool outputs are discovery results and unconfirmed vulnerability candidates. Human validation is required; no exploit is automatically confirmed.",
+        }
+        report_path = cycle_dir / "cycle-report.json"
+        report_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        (output_dir / "latest-report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        progress(f"Combined cycle report saved: {report_path}")
+        state["last_completed_cycle"] = cycle
         state["last_completed_cycle"] = cycle
         state["last_cycle_at"] = datetime.now(timezone.utc).isoformat()
         state["status"] = "paused" if stop_event is not None and stop_event.is_set() else "running"
