@@ -374,7 +374,6 @@ class ZapEngine:
             "discovered_urls": [_safe_evidence_url(item) for item in urls[:5000]],
             "alert_count": len(alerts),
             "findings": [item.to_dict() for item in findings],
-            "alerts": alerts,
             "limitations": [
                 "ZAP alerts are scanner findings and require human validation.",
                 "No HTTP request or response bodies are copied into the Darth report.",
