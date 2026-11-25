@@ -1,5 +1,5 @@
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -56,16 +56,18 @@ class ZapEngineTests(unittest.TestCase):
         self.assertEqual(alerts_to_findings([{"name": "bad"}]), [])
 
     def test_batch_launcher_uses_cmd_on_windows(self):
+        launcher = PureWindowsPath("C:/ZAP/zap.bat")
         with patch("darthscanner.zap_engine.os.name", "nt"):
-            command = build_launch_command(Path("C:/ZAP/zap.bat"), 8090, "secret")
+            command = build_launch_command(launcher, 8090, "secret")
         self.assertEqual(command[:2], ["cmd.exe", "/c"])
         self.assertEqual(command[2].replace("\\", "/"), "C:/ZAP/zap.bat")
         self.assertIn("127.0.0.1", command)
         self.assertIn("api.key=secret", command)
 
     def test_executable_launcher_runs_directly(self):
+        launcher = PureWindowsPath("C:/ZAP/zap.exe")
         with patch("darthscanner.zap_engine.os.name", "nt"):
-            command = build_launch_command(Path("C:/ZAP/zap.exe"), 8090, "secret")
+            command = build_launch_command(launcher, 8090, "secret")
         self.assertEqual(command[0].replace("\\", "/"), "C:/ZAP/zap.exe")
 
     def test_launcher_can_be_configured_by_environment(self):
