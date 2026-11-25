@@ -58,14 +58,15 @@ class ZapEngineTests(unittest.TestCase):
     def test_batch_launcher_uses_cmd_on_windows(self):
         with patch("darthscanner.zap_engine.os.name", "nt"):
             command = build_launch_command(Path("C:/ZAP/zap.bat"), 8090, "secret")
-        self.assertEqual(command[:3], ["cmd.exe", "/c", "C:/ZAP/zap.bat".replace("/", "\\\\")])
+        self.assertEqual(command[:3], ["cmd.exe", "/c", command[2]]) 
+        self.assertEqual(command[2].replace("\\\\", "/"), "C:/ZAP/zap.bat")
         self.assertIn("127.0.0.1", command)
         self.assertIn("api.key=secret", command)
 
     def test_executable_launcher_runs_directly(self):
         with patch("darthscanner.zap_engine.os.name", "nt"):
             command = build_launch_command(Path("C:/ZAP/zap.exe"), 8090, "secret")
-        self.assertEqual(command[0], "C:/ZAP/zap.exe".replace("/", "\\\\"))
+        self.assertEqual(command[0].replace("\\\\", "/"), "C:/ZAP/zap.exe")
 
     def test_launcher_can_be_configured_by_environment(self):
         with tempfile.TemporaryDirectory() as folder:
