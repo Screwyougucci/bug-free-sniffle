@@ -71,6 +71,16 @@ def find_zap_launcher() -> Path | None:
     return None
 
 
+def scope_regex_for_target(target: str) -> str:
+    """Return a strict same-host URL regex for a ZAP context."""
+    parts = urlsplit(target)
+    if parts.scheme not in {"http", "https"} or not parts.hostname:
+        raise ValueError("Target must be a valid HTTP or HTTPS URL.")
+    host = re.escape(parts.hostname.encode("idna").decode("ascii"))
+    port = f":{parts.port}" if parts.port else ""
+    return f"^{re.escape(parts.scheme)}://{host}{re.escape(port)}/.*$"
+
+
 def _free_loopback_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -276,10 +286,7 @@ class ZapEngine:
         self._api("core", "action", "newSession", name="darth-" + secrets.token_hex(6), overwrite="true")
         context = self._api("context", "action", "newContext", contextName=context_name)
         context_id = str(context.get("contextId") or "")
-        host = re.escape(parts.hostname.encode("idna").decode("ascii"))
-        port = f":{parts.port}" if parts.port else ""
-        scheme = re.escape(parts.scheme)
-        exact_origin = f"^{scheme}://{host}{re.escape(port)}/.*$"
+        exact_origin = scope_regex_for_target(target)
         self._api("context", "action", "includeInContext", contextName=context_name, regex=exact_origin)
         self._api("context", "action", "setContextInScope", contextName=context_name, booleanInScope="true")
 
