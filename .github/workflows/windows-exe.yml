@@ -19,6 +19,7 @@ on:
       - "v0.22.0-github-source-audit"
       - "v0.23.0-real-finding-quality"
       - "v0.24.0-real-site-discovery"
+      - "v0.25.0-owasp-zap-engine"
     tags:
       - "v*"
 
@@ -47,7 +48,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path release | Out-Null
           Copy-Item dist/DarthScanner.exe release/
           @'
-          DARTH SCANNER 0.24.0
+          DARTH SCANNER 0.25.0
 
           Run DarthScanner.exe to open the desktop dashboard.
           All scanning runs inside the desktop app. No terminal or separate engine is required.
