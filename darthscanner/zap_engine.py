@@ -363,7 +363,27 @@ class ZapEngine:
 
         active_status = "not-requested"
         if active_scan:
+            # Use a conservative scanner profile: low attack strength and only
+            # two concurrent threads per host. The active scanner still sends
+            # test requests, which is why the UI requires a separate approval.
+            self._api("ascan", "action", "setOptionThreadPerHost", Integer="2")
+            scanner_payload = self._api("ascan", "view", "scanners", scanPolicyName="Default Policy")
+            scanners = scanner_payload.get("scanners", [])
+            low_strength_rules = 0
+            for scanner in scanners if isinstance(scanners, list) else []:
+                scanner_id = scanner.get("id")
+                if scanner_id is None:
+                    continue
+                enabled = str(scanner.get("enabled", "true")).lower() != "false"
+                if enabled:
+                    self._api(
+                        "ascan", "action", "setPolicyAttackStrength",
+                        id=str(scanner_id), attackStrength="LOW",
+                        scanPolicyName="Default Policy",
+                    )
+                    low_strength_rules += 1
             if progress:
+                progress(f"Configured {low_strength_rules} active rules at LOW attack strength")
                 progress("OWASP ZAP active scanner starting (authorized opt-in)")
             active = self._api(
                 "ascan", "action", "scan", url=target,
