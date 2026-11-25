@@ -29,6 +29,7 @@ from .github_audit import audit_github_repository, discover_github_repositories
 from .exploitability import analyze_exploitability
 from .fuzz_reports import build_fuzz_finding_reports
 from .fuzz_correlation import correlate_fuzz_observations
+from .toolchain import install_toolchain, run_toolchain_watch, tool_status
 
 
 APP_NAME = "Darth Scanner"
@@ -162,6 +163,14 @@ class DarthScannerApp:
         tk.Button(engine_row, text="GET ZAP", command=self.open_zap_download,
                   bg="#253247", fg="white", relief="flat", padx=12, pady=8,
                   font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 12))
+        self.tool_install_button = tk.Button(engine_row, text="INSTALL / UPDATE TOOLS", command=self.install_tools,
+                                             bg="#253247", fg="white", relief="flat", padx=13, pady=8,
+                                             font=("Segoe UI", 9, "bold"))
+        self.tool_install_button.pack(side="left", padx=(0, 8))
+        self.toolchain_button = tk.Button(engine_row, text="FULL TOOLCHAIN", command=self.start_toolchain_scan,
+                                          bg="#9b2438", fg="white", relief="flat", padx=13, pady=8,
+                                          font=("Segoe UI", 9, "bold"))
+        self.toolchain_button.pack(side="left", padx=(0, 12))
         self.zap_active_var = tk.BooleanVar(value=False)
         tk.Checkbutton(
             engine_row,
@@ -309,6 +318,8 @@ class DarthScannerApp:
         self.start_button.configure(state="disabled" if running else "normal")
         self.deep_scan_button.configure(state="disabled" if running else "normal")
         self.zap_button.configure(state="disabled" if running else "normal")
+        self.tool_install_button.configure(state="disabled" if running else "normal")
+        self.toolchain_button.configure(state="disabled" if running else "normal")
         self.stop_button.configure(state="normal" if running else "disabled")
         self.fuzz_button.configure(state="disabled" if running else "normal")
         self.github_audit_button.configure(state="disabled" if running else "normal")
