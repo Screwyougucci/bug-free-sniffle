@@ -419,17 +419,16 @@ def run_toolchain_watch(target: str, output_dir: Path, *, duration_hours: int = 
     if state_path.is_file():
         try:
             previous = json.loads(state_path.read_text(encoding="utf-8"))
-            if previous.get("target") == target and previous.get("status") in {"paused", "running"} and previous.get("deadline", 0) > now:
+            if previous.get("target") == target and isinstance(previous.get("last_completed_cycle", 0), int):
                 state = previous
                 progress(f"Resuming saved assessment at cycle {int(state.get('last_completed_cycle', 0)) + 1}.")
         except (OSError, ValueError):
             state = {}
     if not state:
-        state = {
-            "target": target, "started_at": datetime.now(timezone.utc).isoformat(),
-            "deadline": now + int(duration_hours) * 3600,
-            "duration_hours": int(duration_hours), "last_completed_cycle": 0,
-        }
+        state = {"target": target, "last_completed_cycle": 0}
+    state["started_at"] = state.get("started_at") or datetime.now(timezone.utc).isoformat()
+    state["deadline"] = now + int(duration_hours) * 3600
+    state["duration_hours"] = int(duration_hours)
     state["status"] = "running"
     state["include_subdomains"] = bool(include_subdomains)
     state["nuclei_enabled"] = bool(run_nuclei)
