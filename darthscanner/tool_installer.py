@@ -164,7 +164,8 @@ def _install_one(name: str, repo: str, executable: str, prefix: str, destination
 
 
 def _java_17_available() -> bool:
-    java = shutil.which("java")
+    local_java = tool_root() / "runtime" / "java17" / "bin" / "java.exe"
+    java = str(local_java) if local_java.is_file() else shutil.which("java")
     if not java:
         return False
     try:
