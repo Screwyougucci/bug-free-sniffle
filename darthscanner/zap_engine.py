@@ -56,6 +56,10 @@ def find_zap_launcher() -> Path | None:
         found = shutil.which(name)
         if found:
             candidates.append(Path(found))
+    local_base = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / ".local" / "share")) / "DarthScanner" / "tools"
+    bundled_zap = local_base / "zap"
+    if bundled_zap.is_dir():
+        candidates.extend(bundled_zap.rglob("zap.bat"))
     roots = [
         os.environ.get("ProgramFiles"),
         os.environ.get("ProgramFiles(x86)"),
@@ -253,8 +257,14 @@ class ZapEngine:
         command = build_launch_command(self.launcher, self.port, api_key)
         creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
         try:
+            child_env = os.environ.copy()
+            local_base = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / ".local" / "share")) / "DarthScanner" / "tools"
+            bundled_java = local_base / "runtime" / "java17" / "bin" / "java.exe"
+            if bundled_java.is_file():
+                child_env["JAVA_HOME"] = str(bundled_java.parent.parent)
+                child_env["PATH"] = str(bundled_java.parent) + os.pathsep + child_env.get("PATH", "")
             process = self._popen(
-                command, cwd=str(self.launcher.parent),
+                command, cwd=str(self.launcher.parent), env=child_env,
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL, creationflags=creationflags,
             )
