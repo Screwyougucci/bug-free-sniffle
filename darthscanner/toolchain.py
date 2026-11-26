@@ -246,6 +246,8 @@ def tool_status() -> dict:
     except Exception:
         launcher = None
     status["zap"] = {"installed": launcher is not None, "path": str(launcher) if launcher else None}
+    sqlmap_source = tool_root() / "sqlmap" / "sqlmap.py"
+    status["sqlmap"] = {"installed": sqlmap_source.is_file(), "path": str(sqlmap_source) if sqlmap_source.is_file() else None}
     return status
 
 
