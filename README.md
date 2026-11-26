@@ -1,5 +1,13 @@
 # Darth Scanner — Web & Server Security Scanner
 
+## Version 0.28.0 — GitHub-only tool installation + SQLMap
+
+The INSTALL / UPDATE TOOLS manager now obtains ffuf, Subfinder, httpx, Katana, Nuclei, Temurin Java 17, and OWASP ZAP from their official GitHub repositories/releases. Binary ZIP assets are checked against GitHub's published SHA-256 asset digest (or a publisher checksum manifest) before installation. Java and ZAP are installed into app-local storage without WinGet or administrator-level system changes. Each component is attempted independently and failures are written to %LOCALAPPDATA%\\DarthScanner\\tools\\installed-tools.json.
+
+SQLMap source is downloaded from the official sqlmapproject/sqlmap GitHub release tag. SQLMap is optional and only runs when explicitly enabled in FULL TOOLCHAIN. It checks at most two already-discovered same-origin GET URLs with query parameters, risk 1 / level 1, one thread, a one-second delay, and a 120-second per-endpoint timeout. It does not request database enumeration, table listing, data dumps, OS shell, or file read/write. SQLMap requires a separately available Python 3 interpreter; the desktop EXE itself remains standalone for the other engines. SQLMap results are unconfirmed candidates and require manual verification.
+
+The SQLMap check is an active test and must only be enabled for websites you own or have explicit permission to assess. Use staging where possible. No credentials, POST forms, or raw response bodies are saved by Darth Scanner's SQLMap summary.
+
 ## Version 0.27.0 — resilient multi-tool installer
 
 The INSTALL / UPDATE TOOLS button now uses GitHub's official SHA-256 asset digest when published, or parses common publisher checksum formats such as SHA256SUMS, sha256sum output, and OpenSSL SHA256(filename)= ... entries. It validates the extracted Windows executable before replacing the local copy. Each tool installs independently: if one publisher release is unavailable or cannot be verified, the installer continues with the other tools and records the failure instead of aborting the entire operation.
