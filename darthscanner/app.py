@@ -702,7 +702,7 @@ class DarthScannerApp:
         except ValueError as exc:
             messagebox.showerror("Invalid website", str(exc))
             return
-        missing = [name for name, item in tool_status().items() if name != "zap" and not item["installed"]]
+        missing = [name for name, item in tool_status().items() if name not in {"zap"} and not item["installed"]]
         if missing:
             if messagebox.askyesno("Tools are missing",
                 "Missing tools: " + ", ".join(missing) + "\n\nInstall/update them now?"):
