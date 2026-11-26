@@ -29,7 +29,8 @@ from .github_audit import audit_github_repository, discover_github_repositories
 from .exploitability import analyze_exploitability
 from .fuzz_reports import build_fuzz_finding_reports
 from .fuzz_correlation import correlate_fuzz_observations
-from .toolchain import install_toolchain, run_toolchain_watch, tool_status
+from .tool_installer import install_toolchain
+from .toolchain import run_toolchain_watch, tool_status
 
 
 APP_NAME = "Darth Scanner"
@@ -666,12 +667,24 @@ class DarthScannerApp:
 
     def _run_tool_install(self):
         try:
-            installed = install_toolchain(
+            report = install_toolchain(
                 progress=lambda message: self.events.put(("log", message)),
                 stop_event=self.stop_event,
             )
-            self.events.put(("log", "Installed tools: " + ", ".join(sorted(installed))))
-            self.events.put(("exit", "Security tools installed/updated."))
+            installed = report.get("installed", {})
+            failed = report.get("failed", {})
+            prerequisites = report.get("prerequisites", {})
+            self.events.put(("log", "Core tools ready: " + (", ".join(sorted(installed)) or "none")))
+            if failed:
+                self.events.put(("log", "Core tools requiring attention: " + "; ".join(
+                    f"{name}: {reason}" for name, reason in failed.items()
+                )))
+            for name, status in prerequisites.items():
+                self.events.put(("log", f"{name}: {'READY' if status.get('installed') else 'MISSING'} — {status.get('detail', '')}"))
+            if failed or any(not item.get("installed") for item in prerequisites.values()):
+                self.events.put(("exit", f"Installation finished with issues: {len(installed)}/5 core tools ready. See the log and installed-tools.json for details."))
+            else:
+                self.events.put(("exit", "All five core tools, Java 17+, and OWASP ZAP are ready."))
         except Exception as exc:
             self.events.put(("exit", f"Tool installation error: {exc}"))
 
