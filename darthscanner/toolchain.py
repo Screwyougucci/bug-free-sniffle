@@ -246,6 +246,8 @@ def tool_status() -> dict:
     except Exception:
         launcher = None
     status["zap"] = {"installed": launcher is not None, "path": str(launcher) if launcher else None}
+    sqlmap_source = tool_root() / "sqlmap" / "sqlmap.py"
+    status["sqlmap"] = {"installed": sqlmap_source.is_file() and bool(shutil.which("python") or shutil.which("python3")), "path": str(sqlmap_source) if sqlmap_source.is_file() else None, "detail": "Python 3 is required to execute the source package."}
     return status
 
 
@@ -396,7 +398,7 @@ def _nuclei_findings(path: Path, root_url: str, include_subdomains: bool) -> lis
 
 def run_toolchain_watch(target: str, output_dir: Path, *, duration_hours: int = 1,
                         include_subdomains: bool = False, run_nuclei: bool = False,
-                        run_zap: bool = False, stop_event=None,
+                        run_zap: bool = False, run_sqlmap: bool = False, stop_event=None,
                         progress=lambda message: None,
                         cycle_interval_seconds: int = 1800) -> dict:
     """Run checkpointed, rate-limited assessment cycles until duration or Stop.
@@ -528,6 +530,17 @@ def run_toolchain_watch(target: str, output_dir: Path, *, duration_hours: int = 
                 zap_findings = json.loads(zap_file.read_text(encoding="utf-8")).get("findings", [])
             except (OSError, ValueError):
                 zap_findings = []
+        sqlmap_findings = []
+        if run_sqlmap and (stop_event is None or not stop_event.is_set()):
+            try:
+                from .sqlmap_engine import run_sqlmap_checks
+                sqlmap_findings = run_sqlmap_checks(
+                    katana_endpoints, target, cycle_dir / "sqlmap",
+                    include_subdomains=include_subdomains,
+                    stop_event=stop_event, progress=progress,
+                )
+            except Exception as exc:
+                progress(f"SQLMap stage failed; other checks continue: {exc}")
         report = {
             "schema_version": 1, "target": target, "cycle": cycle,
             "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -541,6 +554,8 @@ def run_toolchain_watch(target: str, output_dir: Path, *, duration_hours: int = 
             "nuclei_candidates": nuclei_findings[:2000],
             "zap_candidate_count": len(zap_findings),
             "zap_candidates": zap_findings[:1000],
+            "sqlmap_candidate_count": sum(1 for item in sqlmap_findings if item.get("outcome") == "candidate_detected"),
+            "sqlmap_results": sqlmap_findings,
             "tool_exit_codes": tool_exit_codes,
             "disclaimer": "Tool outputs are discovery results and unconfirmed vulnerability candidates. Human validation is required; no exploit is automatically confirmed.",
         }
