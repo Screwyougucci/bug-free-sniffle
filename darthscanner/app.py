@@ -684,7 +684,7 @@ class DarthScannerApp:
             if failed or any(not item.get("installed") for item in prerequisites.values()):
                 self.events.put(("exit", f"Installation finished with issues: {len(installed)}/5 core tools ready. See the log and installed-tools.json for details."))
             else:
-                self.events.put(("exit", "All five core tools, Java 17+, and OWASP ZAP are ready."))
+                self.events.put(("exit", "All core tools, SQLMap source, Java 17+, and OWASP ZAP are ready."))
         except Exception as exc:
             self.events.put(("exit", f"Tool installation error: {exc}"))
 
@@ -711,13 +711,13 @@ class DarthScannerApp:
 
         window = tk.Toplevel(self.root)
         window.title("Full toolchain assessment | Darth Scanner")
-        window.geometry("700x420")
+        window.geometry("700x500")
         window.configure(bg="#0b0e14")
         panel = tk.Frame(window, bg="#151d2a", padx=20, pady=18)
         panel.pack(fill="both", expand=True, padx=16, pady=16)
         tk.Label(panel, text="MULTI-ENGINE ASSESSMENT", bg="#151d2a", fg="#f3f6fb",
                  font=("Segoe UI", 14, "bold")).pack(anchor="w")
-        tk.Label(panel, text="ffuf + Subfinder + httpx + Katana + optional Nuclei",
+        tk.Label(panel, text="ffuf + Subfinder + httpx + Katana + Nuclei + optional SQLMap / ZAP",
                  bg="#151d2a", fg="#9eabc0", font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 14))
         controls = tk.Frame(panel, bg="#151d2a")
         controls.pack(anchor="w")
@@ -727,11 +727,15 @@ class DarthScannerApp:
                    bg="#202a3a", fg="#f7f9fc", insertbackground="white", relief="flat").pack(side="left", padx=(8, 18))
         nuclei_var = tk.BooleanVar(value=False)
         zap_var = tk.BooleanVar(value=False)
+        sqlmap_var = tk.BooleanVar(value=False)
         tk.Checkbutton(panel, text="Enable Nuclei checks (misconfiguration/exposure/SSL tags only; sends test requests)",
                        variable=nuclei_var, bg="#151d2a", fg="#d7d9e0", activebackground="#151d2a",
                        activeforeground="white", selectcolor="#202a3a", font=("Segoe UI", 9)).pack(anchor="w", pady=(14, 4))
         tk.Checkbutton(panel, text="Include OWASP ZAP passive spider (browser-based crawling can interact with page controls)",
                        variable=zap_var, bg="#151d2a", fg="#d7d9e0", activebackground="#151d2a",
+                       activeforeground="white", selectcolor="#202a3a", font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 4))
+        tk.Checkbutton(panel, text="Enable SQLMap low-risk SQL injection checks (max 2 discovered GET URLs; no database dumps/enumeration)",
+                       variable=sqlmap_var, bg="#151d2a", fg="#d7d9e0", activebackground="#151d2a",
                        activeforeground="white", selectcolor="#202a3a", font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 4))
         subdomain_note = ("Subdomain discovery and bounded checks are enabled for the root domain and its discovered subdomains."
                           if self.include_subdomains_var.get() else
@@ -765,6 +769,7 @@ class DarthScannerApp:
                    if self.include_subdomains_var.get() else "")
                 + ("Nuclei checks are ENABLED and send vulnerability test requests.\n\n" if nuclei_var.get() else "")
                 + ("OWASP ZAP passive spider is ENABLED; its browser spider may interact with page controls.\n\n" if zap_var.get() else "")
+                + ("SQLMap is ENABLED: up to two discovered GET query URLs, risk 1 / level 1, no enumeration or dumping.\n\n" if sqlmap_var.get() else "")
                 + "All tools are rate-limited. Results and checkpoints remain on this PC."
             ):
                 return
@@ -782,7 +787,7 @@ class DarthScannerApp:
             self._log(f"Toolchain reports/checkpoint: {output_dir}")
             self.worker = threading.Thread(
                 target=self._run_toolchain_process,
-                args=(target, output_dir, duration, bool(self.include_subdomains_var.get()), bool(nuclei_var.get()), bool(zap_var.get())),
+                args=(target, output_dir, duration, bool(self.include_subdomains_var.get()), bool(nuclei_var.get()), bool(zap_var.get()), bool(sqlmap_var.get())),
                 daemon=True,
             )
             self.worker.start()
@@ -793,11 +798,11 @@ class DarthScannerApp:
                   font=("Segoe UI", 9, "bold")).pack(anchor="e")
 
     def _run_toolchain_process(self, target: str, output_dir: Path, duration: int,
-                               include_subdomains: bool, run_nuclei: bool, run_zap: bool):
+                               include_subdomains: bool, run_nuclei: bool, run_zap: bool, run_sqlmap: bool = False):
         try:
             state = run_toolchain_watch(
                 target, output_dir, duration_hours=duration,
-                include_subdomains=include_subdomains, run_nuclei=run_nuclei, run_zap=run_zap,
+                include_subdomains=include_subdomains, run_nuclei=run_nuclei, run_zap=run_zap, run_sqlmap=run_sqlmap,
                 stop_event=self.stop_event,
                 progress=lambda message: self.events.put(("log", message)),
             )
