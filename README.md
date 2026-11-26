@@ -1,5 +1,11 @@
 # Darth Scanner — Web & Server Security Scanner
 
+## Version 0.27.0 — resilient multi-tool installer
+
+The INSTALL / UPDATE TOOLS button now uses GitHub's official SHA-256 asset digest when published, or parses common publisher checksum formats such as SHA256SUMS, sha256sum output, and OpenSSL SHA256(filename)= ... entries. It validates the extracted Windows executable before replacing the local copy. Each tool installs independently: if one publisher release is unavailable or cannot be verified, the installer continues with the other tools and records the failure instead of aborting the entire operation.
+
+The activity log reports each tool's result. A machine-readable report is written to %LOCALAPPDATA%\\DarthScanner\\tools\\installed-tools.json, including installed tools, per-tool failures, and Java 17 / OWASP ZAP prerequisite status. Unverifiable archives are never installed. Java and ZAP are checked independently and WinGet failures are reported rather than silently treated as success.
+
 ## Version 0.26.0 — managed multi-tool assessment
 
 Darth Scanner now includes an in-app **INSTALL / UPDATE TOOLS** manager and **FULL TOOLCHAIN** assessment. The installer downloads official Windows x64 release archives for ffuf, Subfinder, httpx, Katana, and Nuclei from each project's GitHub releases. It requires the publisher's checksum manifest and rejects archives whose SHA-256 does not match. It extracts only the expected executable into `%LOCALAPPDATA%\\DarthScanner\\tools\\bin`; no system PATH edits are made.
