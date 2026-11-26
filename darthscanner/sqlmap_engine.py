@@ -61,12 +61,13 @@ def run_sqlmap_checks(urls: list[str], root_url: str, output_dir: Path, *,
         if stop_event is not None and stop_event.is_set():
             break
         progress(f"SQLMap: bounded low-risk SQL injection check {index}/{len(candidates)} (GET only).")
+        case_dir = output_dir / f"case-{index}"
         command = [
             python, str(source), "-u", url, "--batch", "--smart",
             "--risk=1", "--level=1", "--technique=BEU",
             "--threads=1", "--delay=1", "--timeout=5", "--retries=0",
             "--flush-session", "--disable-coloring",
-            "--output-dir", str(output_dir / f"case-{index}"),
+            "--output-dir", str(case_dir),
         ]
         flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
         try:
@@ -102,6 +103,9 @@ def run_sqlmap_checks(urls: list[str], root_url: str, output_dir: Path, *,
                 "database_enumeration_performed": False, "raw_output_saved": False,
             })
             progress(f"SQLMap could not start: {exc}")
+        finally:
+            # SQLMap may create session/log files; keep only the redacted summary.
+            shutil.rmtree(case_dir, ignore_errors=True)
     report = {
         "schema_version": 1,
         "tests": summaries,
