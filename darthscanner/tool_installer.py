@@ -215,6 +215,121 @@ def _winget_install(package_id: str, progress) -> bool:
     return True
 
 
+
+def _safe_extract_zip(archive: bytes, destination: Path, max_expanded: int = 900 * 1024 * 1024) -> list[Path]:
+    """Extract a GitHub ZIP with traversal and expansion limits."""
+    written = []
+    root = destination.resolve()
+    total = 0
+    with zipfile.ZipFile(BytesIO(archive)) as bundle:
+        for info in bundle.infolist():
+            if info.is_dir():
+                continue
+            name = info.filename.replace("\\", "/")
+            if name.startswith("/") or re.match(r"^[A-Za-z]:", name):
+                raise ToolchainError("Archive contains an absolute path.")
+            parts = [part for part in name.split("/") if part not in {"", "."}]
+            if any(part == ".." for part in parts):
+                raise ToolchainError("Archive contains path traversal.")
+            total += info.file_size
+            if total > max_expanded:
+                raise ToolchainError("Archive exceeds expanded-size limit.")
+            target = root.joinpath(*parts).resolve()
+            if root != target and root not in target.parents:
+                raise ToolchainError("Archive entry escapes install folder.")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            data = bundle.read(info)
+            if len(data) != info.file_size:
+                raise ToolchainError("Archive entry size mismatch.")
+            target.write_bytes(data)
+            written.append(target)
+    return written
+
+
+def _install_java17_github(progress) -> dict:
+    if _java_17_available():
+        return {"installed": True, "source": "existing Java 17+ on PATH"}
+    release = _latest_release("adoptium/temurin17-binaries")
+    assets = [a for a in release["assets"] if re.match(
+        r"(?i)^OpenJDK17U-jre_x64_windows_hotspot_.*\\.zip$", str(a.get("name", "")))]
+    if not assets:
+        raise ToolchainError("Temurin release has no Windows x64 JRE ZIP.")
+    asset = assets[0]
+    digest, provenance = _asset_sha256(asset, release["assets"])
+    progress(f"Java 17: downloading Temurin {release.get('tag_name')} from GitHub…")
+    archive = _read_url(asset["browser_download_url"], 300 * 1024 * 1024)
+    actual = sha256(archive).hexdigest()
+    if actual != digest:
+        raise ToolchainError("Temurin JRE SHA-256 mismatch; archive rejected.")
+    base = tool_root() / "runtime"
+    staging = base / "java17-staging"
+    final = base / "java17"
+    shutil.rmtree(staging, ignore_errors=True)
+    files = _safe_extract_zip(archive, staging)
+    java_files = [p for p in files if p.name.lower() == "java.exe" and p.parent.name.lower() == "bin"]
+    if not java_files:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise ToolchainError("Verified JRE archive did not contain bin/java.exe.")
+    home = java_files[0].parent.parent
+    shutil.rmtree(final, ignore_errors=True)
+    final.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(home), str(final))
+    shutil.rmtree(staging, ignore_errors=True)
+    progress(f"Java 17 installed from GitHub: {final}")
+    return {"installed": True, "version": release.get("tag_name"), "path": str(final / "bin" / "java.exe"), "sha256": actual, "verification": provenance}
+
+
+def _install_zap_github(progress) -> dict:
+    existing = _zap_launcher()
+    if existing:
+        return {"installed": True, "source": "existing ZAP", "path": str(existing)}
+    release = _latest_release("zaproxy/zaproxy")
+    assets = [a for a in release["assets"] if str(a.get("name", "")).endswith("_Crossplatform.zip")]
+    if not assets:
+        raise ToolchainError("ZAP release has no Crossplatform ZIP.")
+    asset = assets[0]
+    digest, provenance = _asset_sha256(asset, release["assets"])
+    progress(f"OWASP ZAP: downloading {release.get('tag_name')} from GitHub…")
+    archive = _read_url(asset["browser_download_url"], 450 * 1024 * 1024)
+    actual = sha256(archive).hexdigest()
+    if actual != digest:
+        raise ToolchainError("OWASP ZAP SHA-256 mismatch; archive rejected.")
+    staging = tool_root() / "zap-staging"
+    final = tool_root() / "zap"
+    shutil.rmtree(staging, ignore_errors=True)
+    files = _safe_extract_zip(archive, staging)
+    launchers = [p for p in files if p.name.lower() == "zap.bat"]
+    if not launchers:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise ToolchainError("Verified ZAP archive did not contain zap.bat.")
+    shutil.rmtree(final, ignore_errors=True)
+    shutil.move(str(launchers[0].parent), str(final))
+    shutil.rmtree(staging, ignore_errors=True)
+    progress(f"OWASP ZAP installed from GitHub: {final}")
+    return {"installed": True, "version": release.get("tag_name"), "path": str(final / "zap.bat"), "sha256": actual, "verification": provenance}
+
+
+def _install_sqlmap_github(progress) -> dict:
+    release = _latest_release("sqlmapproject/sqlmap")
+    tag = str(release.get("tag_name") or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9._+-]{1,80}", tag):
+        raise ToolchainError("sqlmap release tag is missing or invalid.")
+    progress(f"sqlmap: downloading official GitHub source tag {tag}…")
+    archive = _read_url(f"https://api.github.com/repos/sqlmapproject/sqlmap/zipball/{tag}", 80 * 1024 * 1024)
+    staging = tool_root() / "sqlmap-staging"
+    final = tool_root() / "sqlmap"
+    shutil.rmtree(staging, ignore_errors=True)
+    files = _safe_extract_zip(archive, staging, max_expanded=250 * 1024 * 1024)
+    entrypoints = [p for p in files if p.name == "sqlmap.py"]
+    if not entrypoints:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise ToolchainError("sqlmap source archive did not contain sqlmap.py.")
+    shutil.rmtree(final, ignore_errors=True)
+    shutil.move(str(entrypoints[0].parent), str(final))
+    shutil.rmtree(staging, ignore_errors=True)
+    progress(f"sqlmap source installed from GitHub tag {tag}.")
+    return {"installed": True, "version": tag, "path": str(final / "sqlmap.py"), "source": "GitHub release tag over HTTPS", "note": "sqlmap publishes source, not a Windows executable."}
+
 def install_toolchain(progress=lambda message: None, stop_event=None) -> dict:
     """Attempt every official tool independently and return an explicit report."""
     if os.name != "nt":
