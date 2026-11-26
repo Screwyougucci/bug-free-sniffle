@@ -682,7 +682,7 @@ class DarthScannerApp:
             for name, status in prerequisites.items():
                 self.events.put(("log", f"{name}: {'READY' if status.get('installed') else 'MISSING'} — {status.get('detail', '')}"))
             if failed or any(not item.get("installed") for item in prerequisites.values()):
-                self.events.put(("exit", f"Installation finished with issues: {len(installed)}/5 core tools ready. See the log and installed-tools.json for details."))
+                self.events.put(("exit", f"Installation finished with issues: {len(installed)}/6 tools ready. See the log and installed-tools.json for details."))
             else:
                 self.events.put(("exit", "All core tools, SQLMap source, Java 17+, and OWASP ZAP are ready."))
         except Exception as exc:
